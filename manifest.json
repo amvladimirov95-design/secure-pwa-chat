@@ -1,0 +1,19 @@
+{
+  "nav_type": "none",
+  "name": "GitChat Secure",
+  "short_name": "GitChat",
+  "description": "Приватный чат через GitHub API",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "background_color": "#121212",
+  "theme_color": "#1e1e1e",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "https://cdn-icons-png.flaticon.com/512/5968/5968756.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}

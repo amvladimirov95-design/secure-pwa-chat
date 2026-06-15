@@ -2,197 +2,439 @@
 <html lang="ru">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>GitChat Multi-File PWA</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>GitChat Messanger</title>
     <link rel="manifest" href="./manifest.json">
     <link rel="apple-touch-icon" href="https://cdn-icons-png.flaticon.com/512/5968/5968756.png">
-    <meta name="theme-color" content="#1e1e1e">
+    <meta name="theme-color" content="#17212b">
     
     <style>
-        body { font-family: -apple-system, BlinkMacSystemFont, sans-serif; background: #121212; color: #fff; margin: 0; padding: 15px; }
-        #auth-box, #chat-box { max-width: 450px; margin: 20px auto; background: #1e1e1e; padding: 20px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.5); }
-        #messages { height: 60vh; overflow-y: auto; border: 1px solid #2d2d2d; padding: 10px; margin-bottom: 15px; display: flex; flex-direction: column; border-radius: 8px; background: #151515; }
-        .msg { margin: 6px 0; padding: 10px 14px; border-radius: 16px; background: #26262b; width: fit-content; max-width: 75%; word-break: break-word; font-size: 15px; }
-        .msg.me { background: #007bff; align-self: flex-end; color: white; }
-        input, button { width: 100%; padding: 12px; margin-top: 8px; box-sizing: border-box; background: #2a2a2a; color: #fff; border: 1px solid #3a3a3a; border-radius: 8px; font-size: 15px; }
-        input:focus { border-color: #007bff; outline: none; }
-        button { background: #007bff; cursor: pointer; font-weight: bold; border: none; margin-top: 12px; }
-        button:hover { background: #0056b3; }
-        .hidden { display: none; }
-        #status-info { font-size: 12px; color: #777; text-align: center; margin-bottom: 10px; }
+        :root {
+            --bg-main: #0e1621;
+            --bg-dark: #17212b;
+            --bg-active: #202b36;
+            --text-main: #f5f5f5;
+            --text-muted: #7f91a4;
+            --accent: #2b70c9;
+            --my-msg: #182533;
+            --other-msg: #182533;
+        }
+
+        body { 
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; 
+            background: var(--bg-main); 
+            color: var(--text-main); 
+            margin: 0; 
+            padding: 0; 
+            height: 100dvh;
+            overflow: hidden;
+            -webkit-user-select: none;
+        }
+
+        /* Общие экраны */
+        .screen {
+            display: flex;
+            flex-direction: column;
+            width: 100%;
+            height: 100dvh;
+            position: absolute;
+            top: 0;
+            left: 0;
+            background: var(--bg-main);
+            transition: transform 0.2s ease-in-out;
+        }
+
+        .hidden { display: none !important; }
+
+        /* Шапка */
+        .header {
+            background: var(--bg-dark);
+            height: 56px;
+            min-height: 56px;
+            display: flex;
+            align-items: center;
+            padding: 0 16px;
+            box-shadow: 0 1px 2px rgba(0,0,0,0.2);
+            justify-content: space-between;
+            box-sizing: border-box;
+        }
+
+        .header-title { font-size: 18px; font-weight: 600; }
+        .header-btn { background: none; border: none; color: var(--accent); font-size: 16px; cursor: pointer; padding: 4px 8px; }
+
+        /* ЭКРАН 1: СПИСОК ЧАТОВ */
+        .chats-list {
+            flex: 1;
+            overflow-y: auto;
+        }
+
+        .chat-item {
+            display: flex;
+            align-items: center;
+            padding: 12px 16px;
+            border-bottom: 1px solid #101924;
+            cursor: pointer;
+        }
+        .chat-item:active { background: var(--bg-active); }
+
+        .avatar {
+            width: 48px;
+            height: 48px;
+            background: #2b5278;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            font-size: 18px;
+            margin-right: 14px;
+            color: #fff;
+        }
+
+        .chat-info { flex: 1; }
+        .chat-name { font-size: 16px; font-weight: 600; margin-bottom: 4px; text-transform: capitalize; }
+        .chat-preview { font-size: 13px; color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+        /* ЭКРАН 2: ОКНО ДИАЛОГА */
+        #messages-container {
+            flex: 1;
+            overflow-y: auto;
+            padding: 16px;
+            display: flex;
+            flex-direction: column;
+            background: url('https://user-images.githubusercontent.com/15075759/28719144-86dc0f70-73b1-11e7-911d-60d70fcded21.png'); /* Классический фон TG */
+            background-color: var(--bg-main);
+        }
+
+        .msg-row { display: flex; width: 100%; margin: 4px 0; }
+        .msg-row.me { justify-content: flex-end; }
+
+        .msg-bubble {
+            max-width: 75%;
+            padding: 8px 14px;
+            border-radius: 16px;
+            font-size: 15px;
+            line-height: 1.4;
+            word-break: break-word;
+            position: relative;
+        }
+        .msg-row.me .msg-bubble { background: #2b5278; border-bottom-right-radius: 4px; }
+        .msg-row.other .msg-bubble { background: var(--bg-dark); border-bottom-left-radius: 4px; }
+
+        .msg-author { font-size: 12px; font-weight: bold; color: var(--accent); margin-bottom: 2px; text-transform: capitalize; }
+        .msg-time { font-size: 11px; color: var(--text-muted); text-align: right; margin-top: 4px; }
+
+        /* Панель ввода сообщений */
+        .input-panel {
+            background: var(--bg-dark);
+            padding: 8px 12px;
+            display: flex;
+            align-items: center;
+            box-sizing: border-box;
+        }
+
+        .message-input {
+            flex: 1;
+            background: #1f2933;
+            border: none;
+            color: var(--text-main);
+            padding: 10px 14px;
+            border-radius: 20px;
+            font-size: 15px;
+            outline: none;
+        }
+
+        .send-btn {
+            background: none;
+            border: none;
+            color: var(--accent);
+            font-size: 24px;
+            margin-left: 8px;
+            cursor: pointer;
+            padding: 0 4px;
+        }
+
+        /* ЭКРАН 3: НАСТРОЙКИ */
+        .settings-content { padding: 20px; overflow-y: auto; flex: 1; }
+        .settings-content input {
+            width: 100%; padding: 12px; margin-bottom: 12px; box-sizing: border-box;
+            background: var(--bg-dark); color: #fff; border: 1px solid #202b36; border-radius: 8px; font-size: 15px;
+        }
+        .btn-danger { background: #d93838 !important; color: white; border: none; padding: 12px; border-radius: 8px; width: 100%; font-weight: bold; cursor: pointer; }
     </style>
 </head>
 <body>
 
-<div id="auth-box">
-    <h3 style="margin-top:0;">Настройки GitChat</h3>
-    <input type="text" id="token" placeholder="GitHub Token (ghp_...)">
-    <input type="text" id="repo" placeholder="Владелец/Имя_Репозитория">
-    <input type="text" id="username" placeholder="Ваш ник латиницей (пример: anton)">
-    <input type="text" id="users-list" placeholder="Все участники через запятую (anton, boris, ivan)">
-    <button onclick="login()">Войти в чат</button>
-</div>
-
-<div id="chat-box" class="hidden">
-    <div id="status-info">Режим: Без конфликтов записи</div>
-    <div id="messages"></div>
-    <div style="display: flex; gap: 8px;">
-        <input type="text" id="msg-input" placeholder="Сообщение..." style="margin:0;">
-        <button onclick="sendMessage()" style="margin:0; width: auto; padding: 0 20px;">➔</button>
+    <div id="screen-list" class="screen">
+        <div class="header">
+            <div class="header-title">GitChat</div>
+            <button class="header-btn" onclick="showScreen('screen-settings')">⚙️</button>
+        </div>
+        <div id="chats-container" class="chats-list">
+            </div>
     </div>
-    <button onclick="logout()" style="background: #3a3a3a; font-size: 12px; padding: 6px; margin-top: 15px;">Выйти из аккаунта</button>
-</div>
+
+    <div id="screen-chat" class="screen hidden">
+        <div class="header">
+            <button class="header-btn" onclick="showScreen('screen-list')">◀ Назад</button>
+            <div class="header-title" id="active-chat-title">Чат</div>
+            <div style="width: 40px;"></div>
+        </div>
+        <div id="messages-container"></div>
+        <div class="input-panel">
+            <input type="text" id="msg-input" class="message-input" placeholder="Сообщение...">
+            <button onclick="sendMessage()" class="send-btn">➔</button>
+        </div>
+    </div>
+
+    <div id="screen-settings" class="screen hidden">
+        <div class="header">
+            <button class="header-btn" onclick="saveSettings()">Готово</button>
+            <div class="header-title">Настройки</div>
+            <div style="width: 50px;"></div>
+        </div>
+        <div class="settings-content">
+            <label style="color: var(--text-muted); font-size: 13px;">GitHub токен:</label>
+            <input type="text" id="set-token" placeholder="github_pat_...">
+            
+            <label style="color: var(--text-muted); font-size: 13px;">Репозиторий-база:</label>
+            <input type="text" id="set-repo" placeholder="логин/имя-репозитория">
+            
+            <label style="color: var(--text-muted); font-size: 13px;">Ваш ник:</label>
+            <input type="text" id="set-username" placeholder="anton">
+            
+            <label style="color: var(--text-muted); font-size: 13px;">Список участников через запятую:</label>
+            <input type="text" id="set-users" placeholder="anton, boris, igor">
+            
+            <button class="btn-danger" onclick="logout()" style="margin-top: 30px;">Выйти из аккаунта</button>
+        </div>
+    </div>
 
 <script>
 if ('serviceWorker' in navigator) {
-    navigator.serviceWorker.register('./sw.js').catch(err => console.error('SW Error:', err));
+    navigator.serviceWorker.register('./sw.js').catch(err => console.error(err));
 }
 
 let CONFIG = { token: '', repo: '', username: '', users: [] };
-let myMessagesSha = ''; // SHA только для ЛИЧНОГО файла пользователя
-let totalMessagesCount = 0;
+let myMessagesSha = '';
+let allMessagesCache = [];
+let activeChatUser = null; // Ник открытого в данный момент собеседника
 
 window.onload = function() {
     if (localStorage.getItem('m_token')) {
-        document.getElementById('token').value = localStorage.getItem('m_token');
-        document.getElementById('repo').value = localStorage.getItem('m_repo');
-        document.getElementById('username').value = localStorage.getItem('m_username');
-        document.getElementById('users-list').value = localStorage.getItem('m_users');
-        login();
+        loadConfigFromStorage();
+        buildChatsList();
+        showScreen('screen-list');
+        
+        // Постоянно качаем данные в фоне
+        loadAllMessages();
+        setInterval(loadAllMessages, 3000);
+    } else {
+        showScreen('screen-settings'); // Если данных нет, открываем настройки
     }
 }
 
-function login() {
-    CONFIG.token = document.getElementById('token').value.trim();
-    CONFIG.repo = document.getElementById('repo').value.trim();
-    CONFIG.username = document.getElementById('username').value.trim().toLowerCase();
-    const rawUsers = document.getElementById('users-list').value.trim();
-
-    if (!CONFIG.token || !CONFIG.repo || !CONFIG.username || !rawUsers) return alert('Заполните все поля!');
-
-    CONFIG.users = rawUsers.split(',').map(u => u.trim().toLowerCase());
-
-    localStorage.setItem('m_token', CONFIG.token);
-    localStorage.setItem('m_repo', CONFIG.repo);
-    localStorage.setItem('m_username', CONFIG.username);
-    localStorage.setItem('m_users', rawUsers);
-
-    document.getElementById('auth-box').classList.add('hidden');
-    document.getElementById('chat-box').classList.remove('hidden');
-
-    if (Notification.permission !== 'granted') Notification.requestPermission();
-
-    loadAllMessages();
-    setInterval(loadAllMessages, 3000); // Опрос раз в 3 секунды
+function showScreen(screenId) {
+    document.getElementById('screen-list').classList.add('hidden');
+    document.getElementById('screen-chat').classList.add('hidden');
+    document.getElementById('screen-settings').classList.add('hidden');
+    document.getElementById(screenId).classList.remove('hidden');
+    
+    if (screenId === 'screen-chat') {
+        scrollChatBottom();
+    }
 }
 
-// ГЛАВНАЯ ФУНКЦИЯ: Скачивает файлы ВСЕХ участников параллельно
-async function loadAllMessages() {
-    if (document.hidden) return;
+function loadConfigFromStorage() {
+    CONFIG.token = localStorage.getItem('m_token') || '';
+    CONFIG.repo = localStorage.getItem('m_repo') || '';
+    CONFIG.username = (localStorage.getItem('m_username') || '').toLowerCase();
+    let rawUsers = localStorage.getItem('m_users') || '';
+    CONFIG.users = rawUsers.split(',').map(u => u.trim().toLowerCase()).filter(u => u.length > 0);
 
-    let allMessages = [];
+    // Заполняем поля в настройках
+    document.getElementById('set-token').value = CONFIG.token;
+    document.getElementById('set-repo').value = CONFIG.repo;
+    document.getElementById('set-username').value = CONFIG.username;
+    document.getElementById('set-users').value = rawUsers;
+}
+
+function saveSettings() {
+    const token = document.getElementById('set-token').value.trim();
+    const repo = document.getElementById('set-repo').value.trim();
+    const username = document.getElementById('set-username').value.trim().toLowerCase();
+    const users = document.getElementById('set-users').value.trim();
+
+    if (!token || !repo || !username || !users) return alert('Заполните все поля!');
+
+    localStorage.setItem('m_token', token);
+    localStorage.setItem('m_repo', repo);
+    localStorage.setItem('m_username', username);
+    localStorage.setItem('m_users', users);
+
+    loadConfigFromStorage();
+    buildChatsList();
+    showScreen('screen-list');
+    loadAllMessages();
+}
+
+function buildChatsList() {
+    const container = document.getElementById('chats-container');
+    container.innerHTML = '';
     
-    // Создаем массив промисов для одновременного скачивания всех файлов
+    // Показываем чаты со всеми участниками, кроме себя самого
+    CONFIG.users.forEach(user => {
+        if (user === CONFIG.username) return;
+
+        const item = document.createElement('div');
+        item.className = 'chat-item';
+        item.onclick = () => openChatWith(user);
+
+        item.innerHTML = `
+            <div class="avatar">${user.substring(0,2).toUpperCase()}</div>
+            <div class="chat-info">
+                <div class="chat-name">${user}</div>
+                <div class="chat-preview" id="preview-${user}">Нет сообщений</div>
+            </div>
+        `;
+        container.appendChild(item);
+    });
+}
+
+function openChatWith(user) {
+    activeChatUser = user;
+    document.getElementById('active-chat-title').innerText = user;
+    showScreen('screen-chat');
+    renderCurrentChat();
+}
+
+async function loadAllMessages() {
+    if (document.hidden || !CONFIG.token) return;
+
+    let loadedMessages = [];
     const requests = CONFIG.users.map(async (user) => {
         const url = `https://api.github.com/repos/${CONFIG.repo}/contents/${user}.json`;
         try {
-            const response = await fetch(url, {
-                headers: { 'Authorization': `Bearer ${CONFIG.token}` }
-            });
-            
-            if (response.status === 404) return; // Файла пользователя еще нет — это нормально
+            const response = await fetch(url, { headers: { 'Authorization': `Bearer ${CONFIG.token}` } });
+            if (response.status === 404) return;
             const data = await response.json();
             
-            // Сохраняем SHA своего файла, он пригодится при отправке
-            if (user === CONFIG.username) {
-                myMessagesSha = data.sha;
-            }
+            if (user === CONFIG.username) myMessagesSha = data.sha;
 
             const content = JSON.parse(decodeURIComponent(escape(atob(data.content))));
-            if (Array.isArray(content)) {
-                allMessages = allMessages.concat(content);
-            }
-        } catch (err) {
-            console.error(`Ошибка чтения файла ${user}:`, err);
-        }
+            if (Array.isArray(content)) loadedMessages = loadedMessages.concat(content);
+        } catch (err) { console.error(err); }
     });
 
     await Promise.all(requests);
+    loadedMessages.sort((a, b) => new Date(a.time) - new Date(b.time));
+    
+    allMessagesCache = loadedMessages;
 
-    // Сортируем абсолютно все сообщения по времени (ISO Timestamp)
-    allMessages.sort((a, b) => new Date(a.time) - new Date(b.time));
+    // Обновляем текст последнего сообщения в списке чатов
+    updatePreviews();
 
-    // Проверяем, появились ли новые сообщения для уведомлений
-    if (allMessages.length > totalMessagesCount) {
-        const lastMsg = allMessages[allMessages.length - 1];
-        if (totalMessagesCount > 0 && lastMsg.user !== CONFIG.username) {
-            if (Notification.permission === 'granted') {
-                new Notification(`От ${lastMsg.user}`, { body: lastMsg.text });
-            }
-        }
-        totalMessagesCount = allMessages.length;
-        renderMessages(allMessages);
+    // Если сейчас открыто окно чата, перерисовываем сообщения
+    if (!document.getElementById('screen-chat').classList.contains('hidden')) {
+        renderCurrentChat();
     }
 }
 
-function renderMessages(messages) {
-    const box = document.getElementById('messages');
-    box.innerHTML = '';
-    messages.forEach(m => {
-        const div = document.createElement('div');
-        div.className = `msg ${m.user === CONFIG.username ? 'me' : ''}`;
-        div.innerText = m.user === CONFIG.username ? m.text : `${m.user}: ${m.text}`;
-        box.appendChild(div);
+function updatePreviews() {
+    CONFIG.users.forEach(user => {
+        if (user === CONFIG.username) return;
+        // Находим последнее сообщение между мной и этим юзером
+        const subHistory = allMessagesCache.filter(m => 
+            (m.user === CONFIG.username && m.to === user) || (m.user === user && m.to === CONFIG.username) || 
+            (m.user === user && !m.to) // Совместимость со старым общим форматом
+        );
+        
+        const previewEl = document.getElementById(`preview-${user}`);
+        if (previewEl && subHistory.length > 0) {
+            const last = subHistory[subHistory.length - 1];
+            previewEl.innerText = `${last.user === CONFIG.username ? 'Вы: ' : ''}${last.text}`;
+        }
     });
-    box.scrollTop = box.scrollHeight;
 }
 
-// ФУНКЦИЯ ОТПРАВКИ: Пишет ТОЛЬКО в файл текущего пользователя
+function renderCurrentChat() {
+    if (!activeChatUser) return;
+    const container = document.getElementById('messages-container');
+    
+    // Фильтруем сообщения только для текущего диалога
+    const chatHistory = allMessagesCache.filter(m => 
+        (m.user === CONFIG.username && m.to === activeChatUser) || 
+        (m.user === activeChatUser && m.to === CONFIG.username) ||
+        (m.user === activeChatUser && !m.to) // поддержка старых версий файлов
+    );
+
+    const isAtBottom = container.scrollHeight - container.scrollTop <= container.clientHeight + 100;
+
+    container.innerHTML = '';
+    chatHistory.forEach(m => {
+        const row = document.createElement('div');
+        const isMe = m.user === CONFIG.username;
+        row.className = `msg-row ${isMe ? 'me' : 'other'}`;
+        
+        let timeStr = '';
+        if (m.time) {
+            const d = new Date(m.time);
+            timeStr = d.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+        }
+
+        row.innerHTML = `
+            <div class="msg-bubble">
+                ${!isMe ? `<div class="msg-author">${m.user}</div>` : ''}
+                <div class="msg-text">${m.text}</div>
+                <div class="msg-time">${timeStr}</div>
+            </div>
+        `;
+        container.appendChild(row);
+    });
+
+    if (isAtBottom) scrollChatBottom();
+}
+
+function scrollChatBottom() {
+    const container = document.getElementById('messages-container');
+    container.scrollTop = container.scrollHeight;
+}
+
 async function sendMessage() {
     const input = document.getElementById('msg-input');
     const text = input.value.trim();
-    if (!text) return;
+    if (!text || !activeChatUser) return;
     input.value = '';
 
     const url = `https://api.github.com/repos/${CONFIG.repo}/contents/${CONFIG.username}.json`;
     let myHistory = [];
 
     try {
-        // Получаем актуальный SHA и контент ТОЛЬКО своего файла
-        const response = await fetch(url, {
-            headers: { 'Authorization': `Bearer ${CONFIG.token}` }
-        });
-
+        const response = await fetch(url, { headers: { 'Authorization': `Bearer ${CONFIG.token}` } });
         if (response.ok) {
             const data = await response.json();
             myMessagesSha = data.sha;
             myHistory = JSON.parse(decodeURIComponent(escape(atob(data.content))));
         }
 
-        // Добавляем новое сообщение в свою историю
+        // Помечаем, кому конкретно отправлено сообщение (параметр "to")
         myHistory.push({
             user: CONFIG.username,
+            to: activeChatUser,
             text: text,
             time: new Date().toISOString()
         });
 
         const newContent = btoa(unescape(encodeURIComponent(JSON.stringify(myHistory))));
 
-        // Пушим на гитхаб без страха перетереть чужие данные
         await fetch(url, {
             method: 'PUT',
             headers: { 'Authorization': `Bearer ${CONFIG.token}`, 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                message: 'u_msg',
-                content: newContent,
-                sha: myMessagesSha || undefined // Если файла не было, SHA слать не нужно
-            })
+            body: JSON.stringify({ message: 'm_send', content: newContent, sha: myMessagesSha || undefined })
         });
 
-        loadAllMessages(); // Обновляем экран
-    } catch (err) {
-        console.error('Ошибка отправки сообщения:', err);
-    }
+        loadAllMessages();
+    } catch (err) { console.error(err); }
 }
 
 function logout() {

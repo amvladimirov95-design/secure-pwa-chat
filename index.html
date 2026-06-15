@@ -28,25 +28,29 @@
             color: var(--text-main); 
             margin: 0; 
             padding: 0; 
-            height: 100dvh;
             overflow: hidden;
             -webkit-user-select: none;
+            position: fixed;
+            width: 100vw;
+            height: 100vh;
         }
 
+        /* Главный каркас приложения с динамическим контролем высоты */
         .screen {
             display: flex;
             flex-direction: column;
             width: 100vw;
-            height: 100dvh;
             position: absolute;
             top: 0;
             left: 0;
             background: var(--bg-main);
             box-sizing: border-box;
+            overflow: hidden;
         }
 
         .hidden { display: none !important; }
 
+        /* Шапка жестко зафиксирована в flex-потоке */
         .header {
             background: var(--bg-dark);
             height: 56px;
@@ -93,17 +97,17 @@
             width: 46px; height: 46px; background: #5288c1; border-radius: 50%;
             display: flex; align-items: center; justify-content: center; font-weight: 600; font-size: 16px; margin-right: 12px; color: #fff;
         }
-        /* Особый стиль для аватарки Избранного */
         .avatar.favorites { background: #2a87ce; font-size: 20px; color: var(--fav-star); }
 
         .chat-info { flex: 1; overflow: hidden; }
         .chat-name { font-size: 15px; font-weight: 600; margin-bottom: 3px; text-transform: capitalize; }
         .chat-preview { font-size: 13px; color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
+        /* Кнопка ПЛЮС в стиле ТГ */
         .fab-btn {
             position: absolute; bottom: 20px; right: 20px; width: 56px; height: 56px;
             background: var(--accent); border-radius: 50%; display: flex; align-items: center;
-            justify-content: center; font-size: 22px; color: white; border: none; cursor: pointer;
+            justify-content: center; font-size: 28px; color: white; border: none; cursor: pointer;
             box-shadow: 0 4px 10px rgba(0,0,0,0.3); z-index: 5;
         }
 
@@ -129,6 +133,7 @@
         .msg-meta { display: inline-flex; align-items: center; float: right; margin-top: 4px; margin-left: 8px; font-size: 11px; color: var(--text-muted); }
         .msg-check { margin-left: 4px; color: #52c41a; font-weight: bold; }
 
+        /* Нижняя панель */
         .input-panel { 
             background: var(--bg-dark); padding: 10px 12px; display: flex; align-items: center; 
             box-sizing: border-box; width: 100%; height: 60px; border-top: 1px solid #101924;
@@ -143,9 +148,15 @@
         }
         .modal-content {
             background: var(--bg-dark); border-radius: 14px; width: 85%; max-width: 320px; padding: 20px;
-            box-sizing: border-box; text-align: center; border: 1px solid #202b36;
+            box-sizing: border-box; text-align: center; border: 1px solid #202b36; display: flex; flex-direction: column; max-height: 80vh;
         }
         .modal-title { font-size: 18px; font-weight: 600; margin-bottom: 16px; }
+        
+        /* Список пользователей внутри модалки плюса */
+        .modal-users-list { overflow-y: auto; flex: 1; max-height: 250px; margin-bottom: 15px; border-radius: 8px; background: var(--bg-main); }
+        .modal-user-item { padding: 12px; text-align: left; border-bottom: 1px solid #101924; cursor: pointer; font-size: 15px; text-transform: capitalize; }
+        .modal-user-item:active { background: var(--bg-active); }
+
         .modal-btn-danger {
             width: 100%; padding: 12px; background: #e53935; color: white; border: none;
             border-radius: 8px; font-size: 15px; font-weight: 600; cursor: pointer; margin-top: 15px;
@@ -191,7 +202,7 @@
         </div>
         <div class="chats-list">
             <div id="chats-container"></div>
-            <button class="fab-btn" onclick="openModal('modal-newchat')" title="Новый чат">📝</button>
+            <button class="fab-btn" onclick="openNewChatModal()">+</button>
         </div>
     </div>
 
@@ -219,12 +230,14 @@
 
     <div id="modal-newchat" class="modal-overlay hidden" onclick="closeModal('modal-newchat')">
         <div class="modal-content" onclick="event.stopPropagation()">
-            <div class="modal-title">Создать новый чат</div>
-            <input type="text" id="newchat-username" class="login-input" placeholder="Ник собеседника" style="margin-bottom: 5px;">
-            <div style="font-size: 11px; color: var(--text-muted); margin-bottom: 15px; text-align: left; padding: 0 5px;">
-                * В репозитории автоматически создастся пустой файл для этого пользователя.
+            <div class="modal-title">Начать чат</div>
+            
+            <div class="modal-users-list" id="modal-registered-users"></div>
+            
+            <div style="border-top: 1px solid #202b36; padding-top: 10px; margin-top: 5px;">
+                <input type="text" id="newchat-username" class="login-input" placeholder="Или введите новый ник">
+                <button class="login-btn" style="width:100%; margin:0;" onclick="createNewChatFile()">Добавить по нику</button>
             </div>
-            <button class="login-btn" style="width:100%; margin:0;" onclick="createNewChatFile()">Создать диалог</button>
             <button class="modal-btn-cancel" onclick="closeModal('modal-newchat')">Отмена</button>
         </div>
     </div>
@@ -247,6 +260,19 @@ let activeChatUser = null;
 let selectedTextToCopy = "";
 let currentSelectedBubble = null;
 
+// Фикс высоты под клавиатуру смартфона
+if (window.visualViewport) {
+    window.visualViewport.addEventListener('resize', () => {
+        const height = window.visualViewport.height;
+        document.querySelectorAll('.screen').forEach(el => {
+            el.style.height = height + 'px';
+        });
+        if (!document.getElementById('screen-chat').classList.contains('hidden')) {
+            scrollChatBottom();
+        }
+    });
+}
+
 window.onload = function() {
     if (localStorage.getItem('gitchat_token')) {
         CONFIG.token = localStorage.getItem('gitchat_token');
@@ -267,7 +293,15 @@ function showScreen(screenId) {
     document.getElementById('screen-login').classList.add('hidden');
     document.getElementById('screen-list').classList.add('hidden');
     document.getElementById('screen-chat').classList.add('hidden');
-    document.getElementById(screenId).classList.remove('hidden');
+    
+    const targetScreen = document.getElementById(screenId);
+    targetScreen.classList.remove('hidden');
+    
+    // Принудительно выставляем высоту текущего вьюпорта
+    if (window.visualViewport) {
+        targetScreen.style.height = window.visualViewport.height + 'px';
+    }
+
     if (screenId === 'screen-chat') {
         closeContextMenu();
         scrollChatBottom();
@@ -344,7 +378,6 @@ function buildChatsList() {
     const container = document.getElementById('chats-container');
     const existingCount = container.children.length;
     
-    // Сортируем пользователей так, чтобы наше "Избранное" (свой ник) всегда шло в самом верху списка
     const sortedUsers = [...CONFIG.users].sort((a, b) => {
         if (a === CONFIG.username) return -1;
         if (b === CONFIG.username) return 1;
@@ -374,6 +407,29 @@ function buildChatsList() {
     }
 }
 
+// Открытие модалки ПЛЮС со списком всех зарегистрированных в системе
+function openNewChatModal() {
+    const listContainer = document.getElementById('modal-registered-users');
+    listContainer.innerHTML = '';
+
+    if (CONFIG.users.length === 0) {
+        listContainer.innerHTML = '<div style="padding:15px; color:var(--text-muted); font-size:14px;">Пользователей не найдено</div>';
+    } else {
+        CONFIG.users.forEach(user => {
+            const isSelf = user === CONFIG.username;
+            const item = document.createElement('div');
+            item.className = 'modal-user-item';
+            item.innerText = isSelf ? "⭐ Избранное (Вы)" : user;
+            item.onclick = () => {
+                closeModal('modal-newchat');
+                openChatWith(user);
+            };
+            listContainer.appendChild(item);
+        });
+    }
+    openModal('modal-newchat');
+}
+
 function openChatWith(user) {
     activeChatUser = user;
     document.getElementById('active-chat-title').innerText = (user === CONFIG.username) ? "Избранное" : user;
@@ -384,8 +440,6 @@ function openChatWith(user) {
 function updatePreviews() {
     CONFIG.users.forEach(user => {
         const isSelf = user === CONFIG.username;
-        
-        // Для Избранного фильтруем только те сообщения, где и отправитель, и получатель — вы сами
         const subHistory = allMessagesCache.filter(m => {
             if (isSelf) {
                 return m.user === CONFIG.username && m.to === CONFIG.username;
@@ -397,7 +451,6 @@ function updatePreviews() {
         const previewEl = document.getElementById(`preview-${user}`);
         if (previewEl && subHistory.length > 0) {
             const last = subHistory[subHistory.length - 1];
-            // В избранном приставка "Вы: " не нужна
             previewEl.innerText = isSelf ? last.text : `${last.user === CONFIG.username ? 'Вы: ' : ''}${last.text}`;
         }
     });
@@ -423,8 +476,6 @@ function renderCurrentChat() {
     chatHistory.forEach(m => {
         const row = document.createElement('div');
         const isMe = m.user === CONFIG.username;
-        
-        // В Избранном все сообщения визуально идут по правому краю (как ваши)
         row.className = `msg-row ${isSelfChat ? 'me' : (isMe ? 'me' : 'other')}`;
         
         let timeStr = '';
@@ -501,7 +552,6 @@ async function createNewChatFile() {
     if (!newUser) return alert('Введите имя пользователя!');
     
     if (newUser === CONFIG.username) {
-        alert('Это ваш ник! Открываем Избранное.');
         closeModal('modal-newchat');
         document.getElementById('newchat-username').value = '';
         openChatWith(CONFIG.username);
@@ -516,7 +566,6 @@ async function createNewChatFile() {
     try {
         const checkRes = await fetch(url, { headers: { 'Authorization': `Bearer ${CONFIG.token}` } });
         if (checkRes.ok) {
-            alert('Такой диалог уже существует в списке!');
             openChatWith(newUser);
             return;
         }
@@ -529,8 +578,8 @@ async function createNewChatFile() {
         });
 
         if (res.ok) {
-            alert(`Диалог с ${newUser} успешно создан!`);
-            loadAllMessages();
+            await loadAllMessages();
+            openChatWith(newUser);
         } else {
             alert('Ошибка при создании файла на GitHub.');
         }
@@ -561,7 +610,6 @@ function closeContextMenu() {
     const menu = document.getElementById('msg-context-menu');
     if (menu) menu.style.display = 'none';
     if (currentSelectedBubble) {
-        currentSelectedBubble.classList.remove('remove');
         currentSelectedBubble.classList.remove('selected');
         currentSelectedBubble = null;
     }

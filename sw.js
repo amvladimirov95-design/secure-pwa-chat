@@ -1,4 +1,4 @@
-const CACHE_NAME = 'gitchat-v2';
+const CACHE_NAME = 'gitchat-v4'; // Повысили версию для сброса
 const ASSETS = [
   './',
   './index.html',
@@ -6,58 +6,53 @@ const ASSETS = [
   'https://cdn-icons-png.flaticon.com/512/5968/5968756.png'
 ];
 
-// Установка воркера и кэширование оболочки
 self.addEventListener('install', (e) => {
-  e.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => cache.addAll(ASSETS))
-  );
+  e.waitUntil(caches.open(CACHE_NAME).then((cache) => cache.addAll(ASSETS)));
+  self.skipWaiting();
 });
 
 self.addEventListener('activate', (e) => {
-  e.waitUntil(self.clients.claim());
-});
-
-// Стратегия: Сначала сеть, если нет — кэш (для работы офлайн)
-self.addEventListener('fetch', (e) => {
-  e.respondWith(
-    fetch(e.request).catch(() => caches.match(e.request))
+  e.waitUntil(
+    caches.keys().then((keys) => Promise.all(
+      keys.map((key) => { if (key !== CACHE_NAME) return caches.delete(key); })
+    )).then(() => self.clients.claim())
   );
 });
 
-// ФОНОВАЯ ПРОВЕРКА (Аналог Пушей для Serverless приложений)
-self.addEventListener('periodicsync', (event) => {
-  if (event.tag === 'check-new-messages') {
-    event.waitUntil(checkGitHubForNewMessages());
-  }
+self.addEventListener('fetch', (e) => {
+  if (e.request.url.includes('api.github.com')) return e.respondWith(fetch(e.request));
+  e.respondWith(fetch(e.request).catch(() => caches.match(e.request)));
 });
 
-// Альтернативный фоновый поток (если браузер не поддерживает PeriodicSync)
-setInterval(() => {
-  checkGitHubForNewMessages();
-}, 15000); // Раз в 15 секунд в фоновом режиме проверки (когда вкладка "спит")
+// Запуск фонового интервала внутри Воркера (он не засыпает, как вкладка)
+let backgroundTimer = null;
+if (!backgroundTimer) {
+  backgroundTimer = setInterval(() => {
+    checkGitHubBackground();
+  }, 30000); // Проверка в фоне каждые 30 секунд
+}
 
-async function checkGitHubForNewMessages() {
-  // Получаем сохраненные данные авторизации из кэша/хранилища (через IndexedDB или передачу данных)
-  // Для простоты реализации воркер проверяет локальное состояние
-  // Если воркер находит новые сообщения в репозитории, он вызывает этот метод:
+async function checkGitHubBackground() {
+  // Воркер не имеет доступа к localStorage напрямую, берем данные через IndexedDB или хак с IndexedDB/клиентами
+  // Но мы можем запросить последние данные, отправив сообщение открытым вкладкам или сделав скрытый запрос,
+  // если закэшировали токены. Чтобы упростить — пока выведем тестовый пуш для проверки жизни воркера:
   
-  /* showSystemNotification("Новое сообщение", "Вам кто-то написал в GitChat!");
+  /* showNotification("Проверка сети", "GitChat проверяет новые сообщения..."); 
   */
 }
 
-function showSystemNotification(title, body) {
+// Универсальный метод вызова пуша из воркера
+function showNotification(title, body) {
   const options = {
     body: body,
     icon: 'https://cdn-icons-png.flaticon.com/512/5968/5968756.png',
     badge: 'https://cdn-icons-png.flaticon.com/512/5968/5968756.png',
-    vibrate: [100, 50, 100],
-    data: { dateOfArrival: Date.now() }
+    vibrate: [200, 100, 200],
+    data: { focused: true }
   };
-  
   self.registration.showNotification(title, options);
 }
 
-// Клик по уведомлению открывает чат
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
   event.waitUntil(

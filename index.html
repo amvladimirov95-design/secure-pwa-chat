@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GitChat Multi-File PWA</title>
+    <link rel="manifest" href="./manifest.json">
+    <link rel="apple-touch-icon" href="https://cdn-icons-png.flaticon.com/512/5968/5968756.png">
+    <meta name="theme-color" content="#1e1e1e">
+    
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, sans-serif; background: #121212; color: #fff; margin: 0; padding: 15px; }
+        #auth-box, #chat-box { max-width: 450px; margin: 20px auto; background: #1e1e1e; padding: 20px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.5); }
+        #messages { height: 60vh; overflow-y: auto; border: 1px solid #2d2d2d; padding: 10px; margin-bottom: 15px; display: flex; flex-direction: column; border-radius: 8px; background: #151515; }
+        .msg { margin: 6px 0; padding: 10px 14px; border-radius: 16px; background: #26262b; width: fit-content; max-width: 75%; word-break: break-word; font-size: 15px; }
+        .msg.me { background: #007bff; align-self: flex-end; color: white; }
+        input, button { width: 100%; padding: 12px; margin-top: 8px; box-sizing: border-box; background: #2a2a2a; color: #fff; border: 1px solid #3a3a3a; border-radius: 8px; font-size: 15px; }
+        input:focus { border-color: #007bff; outline: none; }
+        button { background: #007bff; cursor: pointer; font-weight: bold; border: none; margin-top: 12px; }
+        button:hover { background: #0056b3; }
+        .hidden { display: none; }
+        #status-info { font-size: 12px; color: #777; text-align: center; margin-bottom: 10px; }
+    </style>
+</head>
+<body>
+
+<div id="auth-box">
+    <h3 style="margin-top:0;">Настройки GitChat</h3>
+    <input type="text" id="token" placeholder="GitHub Token (ghp_...)">
+    <input type="text" id="repo" placeholder="Владелец/Имя_Репозитория">
+    <input type="text" id="username" placeholder="Ваш ник латиницей (пример: anton)">
+    <input type="text" id="users-list" placeholder="Все участники через запятую (anton, boris, ivan)">
+    <button onclick="login()">Войти в чат</button>
+</div>
+
+<div id="chat-box" class="hidden">
+    <div id="status-info">Режим: Без конфликтов записи</div>
+    <div id="messages"></div>
+    <div style="display: flex; gap: 8px;">
+        <input type="text" id="msg-input" placeholder="Сообщение..." style="margin:0;">
+        <button onclick="sendMessage()" style="margin:0; width: auto; padding: 0 20px;">➔</button>
+    </div>
+    <button onclick="logout()" style="background: #3a3a3a; font-size: 12px; padding: 6px; margin-top: 15px;">Выйти из аккаунта</button>
+</div>
+
+<script>
+if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('./sw.js').catch(err => console.error('SW Error:', err));
+}
+
+let CONFIG = { token: '', repo: '', username: '', users: [] };
+let myMessagesSha = ''; // SHA только для ЛИЧНОГО файла пользователя
+let totalMessagesCount = 0;
+
+window.onload = function() {
+    if (localStorage.getItem('m_token')) {
+        document.getElementById('token').value = localStorage.getItem('m_token');
+        document.getElementById('repo').value = localStorage.getItem('m_repo');
+        document.getElementById('username').value = localStorage.getItem('m_username');
+        document.getElementById('users-list').value = localStorage.getItem('m_users');
+        login();
+    }
+}
+
+function login() {
+    CONFIG.token = document.getElementById('token').value.trim();
+    CONFIG.repo = document.getElementById('repo').value.trim();
+    CONFIG.username = document.getElementById('username').value.trim().toLowerCase();
+    const rawUsers = document.getElementById('users-list').value.trim();
+
+    if (!CONFIG.token || !CONFIG.repo || !CONFIG.username || !rawUsers) return alert('Заполните все поля!');
+
+    CONFIG.users = rawUsers.split(',').map(u => u.trim().toLowerCase());
+
+    localStorage.setItem('m_token', CONFIG.token);
+    localStorage.setItem('m_repo', CONFIG.repo);
+    localStorage.setItem('m_username', CONFIG.username);
+    localStorage.setItem('m_users', rawUsers);
+
+    document.getElementById('auth-box').classList.add('hidden');
+    document.getElementById('chat-box').classList.remove('hidden');
+
+    if (Notification.permission !== 'granted') Notification.requestPermission();
+
+    loadAllMessages();
+    setInterval(loadAllMessages, 3000); // Опрос раз в 3 секунды
+}
+
+// ГЛАВНАЯ ФУНКЦИЯ: Скачивает файлы ВСЕХ участников параллельно
+async function loadAllMessages() {
+    if (document.hidden) return;
+
+    let allMessages = [];
+    
+    // Создаем массив промисов для одновременного скачивания всех файлов
+    const requests = CONFIG.users.map(async (user) => {
+        const url = `https://api.github.com/repos/${CONFIG.repo}/contents/${user}.json`;
+        try {
+            const response = await fetch(url, {
+                headers: { 'Authorization': `Bearer ${CONFIG.token}` }
+            });
+            
+            if (response.status === 404) return; // Файла пользователя еще нет — это нормально
+            const data = await response.json();
+            
+            // Сохраняем SHA своего файла, он пригодится при отправке
+            if (user === CONFIG.username) {
+                myMessagesSha = data.sha;
+            }
+
+            const content = JSON.parse(decodeURIComponent(escape(atob(data.content))));
+            if (Array.isArray(content)) {
+                allMessages = allMessages.concat(content);
+            }
+        } catch (err) {
+            console.error(`Ошибка чтения файла ${user}:`, err);
+        }
+    });
+
+    await Promise.all(requests);
+
+    // Сортируем абсолютно все сообщения по времени (ISO Timestamp)
+    allMessages.sort((a, b) => new Date(a.time) - new Date(b.time));
+
+    // Проверяем, появились ли новые сообщения для уведомлений
+    if (allMessages.length > totalMessagesCount) {
+        const lastMsg = allMessages[allMessages.length - 1];
+        if (totalMessagesCount > 0 && lastMsg.user !== CONFIG.username) {
+            if (Notification.permission === 'granted') {
+                new Notification(`От ${lastMsg.user}`, { body: lastMsg.text });
+            }
+        }
+        totalMessagesCount = allMessages.length;
+        renderMessages(allMessages);
+    }
+}
+
+function renderMessages(messages) {
+    const box = document.getElementById('messages');
+    box.innerHTML = '';
+    messages.forEach(m => {
+        const div = document.createElement('div');
+        div.className = `msg ${m.user === CONFIG.username ? 'me' : ''}`;
+        div.innerText = m.user === CONFIG.username ? m.text : `${m.user}: ${m.text}`;
+        box.appendChild(div);
+    });
+    box.scrollTop = box.scrollHeight;
+}
+
+// ФУНКЦИЯ ОТПРАВКИ: Пишет ТОЛЬКО в файл текущего пользователя
+async function sendMessage() {
+    const input = document.getElementById('msg-input');
+    const text = input.value.trim();
+    if (!text) return;
+    input.value = '';
+
+    const url = `https://api.github.com/repos/${CONFIG.repo}/contents/${CONFIG.username}.json`;
+    let myHistory = [];
+
+    try {
+        // Получаем актуальный SHA и контент ТОЛЬКО своего файла
+        const response = await fetch(url, {
+            headers: { 'Authorization': `Bearer ${CONFIG.token}` }
+        });
+
+        if (response.ok) {
+            const data = await response.json();
+            myMessagesSha = data.sha;
+            myHistory = JSON.parse(decodeURIComponent(escape(atob(data.content))));
+        }
+
+        // Добавляем новое сообщение в свою историю
+        myHistory.push({
+            user: CONFIG.username,
+            text: text,
+            time: new Date().toISOString()
+        });
+
+        const newContent = btoa(unescape(encodeURIComponent(JSON.stringify(myHistory))));
+
+        // Пушим на гитхаб без страха перетереть чужие данные
+        await fetch(url, {
+            method: 'PUT',
+            headers: { 'Authorization': `Bearer ${CONFIG.token}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                message: 'u_msg',
+                content: newContent,
+                sha: myMessagesSha || undefined // Если файла не было, SHA слать не нужно
+            })
+        });
+
+        loadAllMessages(); // Обновляем экран
+    } catch (err) {
+        console.error('Ошибка отправки сообщения:', err);
+    }
+}
+
+function logout() {
+    localStorage.clear();
+    location.reload();
+}
+</script>
+</body>
+</html>

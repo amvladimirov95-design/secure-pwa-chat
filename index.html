@@ -264,6 +264,7 @@ if ('serviceWorker' in navigator) {
 let CONFIG = { token: '', repo: 'amvladimirov95-design/gitchat-storage', username: '', users: [] };
 let myMessagesSha = '';
 let allMessagesCache = [];
+let lastRenderedHash = ""; // Хэш для отслеживания изменений интерфейса
 let activeChatUser = null;
 let selectedTextToCopy = "";
 let currentSelectedBubble = null;
@@ -303,12 +304,11 @@ function requestPushPermission() {
         Notification.requestPermission().then(permission => {
             if (permission === 'granted') {
                 alert('Уведомления успешно подключены!');
-                // Тестовый вызов через интерфейс
                 if (swRegistration) {
                     swRegistration.showNotification("GitChat", { body: "Уведомления успешно настроены на смартфоне!", icon: "https://cdn-icons-png.flaticon.com/512/5968/5968756.png" });
                 }
             } else {
-                alert('Доступ отклонен. Проверьте настройки разрешений сайта в браузере.');
+                alert('Доступ отклонен. Проверьте настройки разрешений в браузере.');
             }
             closeModal('modal-settings');
         });
@@ -317,7 +317,6 @@ function requestPushPermission() {
     }
 }
 
-// Принудительные системные слушатели статуса сети
 window.addEventListener('online', () => updateHeaderStatus(true));
 window.addEventListener('offline', () => updateHeaderStatus(false));
 
@@ -358,6 +357,7 @@ window.onload = function() {
         updateUnreadBadges();
         
         loadAllMessages();
+        // Запускаем таймер, который работает ВСЕГДА, даже если вкладка свернута
         setInterval(loadAllMessages, 4000);
     } else {
         showScreen('screen-login');
@@ -368,12 +368,8 @@ function updateHeaderStatus(online) {
     isOnlineStatus = online;
     const titleEl = document.getElementById('main-header-title');
     if (!titleEl) return;
-
-    if (online) {
-        titleEl.innerHTML = "GitChat";
-    } else {
-        titleEl.innerHTML = `<span class="spinner"></span><span class="status-connecting">Соединение...</span>`;
-    }
+    if (online) { titleEl.innerHTML = "GitChat"; } 
+    else { titleEl.innerHTML = `<span class="spinner"></span><span class="status-connecting">Соединение...</span>`; }
 }
 
 function showScreen(screenId) {
@@ -385,7 +381,7 @@ function showScreen(screenId) {
     targetScreen.classList.remove('hidden');
     
     if (window.visualViewport) { targetScreen.style.height = window.visualViewport.height + 'px'; }
-    if (screenId === 'screen-chat') { closeContextMenu(); scrollChatBottom(); }
+    if (screenId === 'screen-chat') { closeContextMenu(); lastRenderedHash = ""; renderCurrentChat(); scrollChatBottom(); }
 }
 
 function openModal(id) { document.getElementById(id).classList.remove('hidden'); }
@@ -413,9 +409,7 @@ async function handleLogin() {
                 body: JSON.stringify({ message: `initial_registration_${username}`, content: emptyContent })
             });
         }
-    } catch (err) {
-        return alert('Не удалось соединиться с GitHub!');
-    }
+    } catch (err) { return alert('Не удалось соединиться с GitHub!'); }
 
     localStorage.setItem('gitchat_repo', repo);
     localStorage.setItem('gitchat_username', username);
@@ -429,9 +423,7 @@ async function handleLogin() {
 }
 
 async function loadAllMessages() {
-    if (document.hidden || !CONFIG.token) return;
-    
-    // Форсированная проверка: если упал системный статус флага
+    if (!CONFIG.token) return;
     if (!navigator.onLine) { updateHeaderStatus(false); return; }
 
     const url = `https://api.github.com/repos/${CONFIG.repo}/contents/`;
@@ -440,17 +432,15 @@ async function loadAllMessages() {
         const response = await fetchWithTimeout(url, { headers: { 'Authorization': `Bearer ${CONFIG.token}` } }, 2000);
         if (!response.ok) throw new Error();
         files = await response.json();
-        updateHeaderStatus(true); // Всё ок, убираем спиннер
+        updateHeaderStatus(true);
     } catch (e) { 
-        updateHeaderStatus(false); // Запрос завис/упал — включаем «Соединение...» принудительно
+        updateHeaderStatus(false); 
         return; 
     }
 
     const jsonFiles = files.filter(f => f.name.endsWith('.json')).map(f => f.name.replace('.json', ''));
     CONFIG.users = jsonFiles;
     localStorage.setItem('gitchat_users_cache', JSON.stringify(jsonFiles));
-    
-    buildChatsList();
 
     const oldLength = allMessagesCache.length;
     let loadedMessages = [];
@@ -461,7 +451,6 @@ async function loadAllMessages() {
             const res = await fetchWithTimeout(fileUrl, { headers: { 'Authorization': `Bearer ${CONFIG.token}` } }, 2000);
             if (res.status === 404) return;
             const data = await res.json();
-            
             if (user === CONFIG.username) myMessagesSha = data.sha;
 
             const content = JSON.parse(btoa_to_utf8(data.content));
@@ -469,29 +458,33 @@ async function loadAllMessages() {
                 content.forEach(m => m.isPending = false);
                 loadedMessages = loadedMessages.concat(content);
             }
-        } catch (err) { 
-            updateHeaderStatus(false);
-        }
+        } catch (err) { updateHeaderStatus(false); }
     });
 
     await Promise.all(requests);
 
     const unsentLocal = allMessagesCache.filter(m => m.isPending && m.user === CONFIG.username);
-    if (unsentLocal.length > 0 && isOnlineStatus) {
-        syncPendingMessages(unsentLocal);
-    }
+    if (unsentLocal.length > 0 && isOnlineStatus) { syncPendingMessages(unsentLocal); }
 
     loadedMessages = loadedMessages.concat(unsentLocal.filter(l => !loadedMessages.some(m => m.time === l.time && m.text === l.text)));
     loadedMessages.sort((a, b) => new Date(a.time) - new Date(b.time));
     
+    // ПРОВЕРКА НА НОВЫЕ СООБЩЕНИЯ (ДЛЯ ПУШЕЙ В СВЕРНУТОМ СОСТОЯНИИ)
     if (oldLength > 0 && loadedMessages.length > oldLength) {
         const lastMsg = loadedMessages[loadedMessages.length - 1];
-        if (lastMsg.user !== CONFIG.username && lastMsg.user !== activeChatUser) {
+        if (lastMsg.user !== CONFIG.username) {
             playNotificationSound();
             
-            // Если вкладка свернута, кидаем локальный пуш напрямую из интерфейса
-            if (document.hidden && 'Notification' in window && Notification.permission === 'granted') {
-                new Notification(`Новое от ${lastMsg.user}`, { body: lastMsg.text, icon: "https://cdn-icons-png.flaticon.com/512/5968/5968756.png" });
+            // Если приложение свернуто ИЛИ открыт другой чат — бьем системный пуш
+            if (document.hidden || activeChatUser !== lastMsg.user) {
+                if ('Notification' in window && Notification.permission === 'granted' && swRegistration) {
+                    swRegistration.showNotification(`Новое от ${lastMsg.user}`, {
+                        body: lastMsg.text,
+                        icon: "https://cdn-icons-png.flaticon.com/512/5968/5968756.png",
+                        tag: "new-msg-tag",
+                        renotify: true
+                    });
+                }
             }
         }
     }
@@ -499,11 +492,14 @@ async function loadAllMessages() {
     allMessagesCache = loadedMessages;
     localStorage.setItem('gitchat_messages_cache', JSON.stringify(allMessagesCache));
 
-    updatePreviews();
-    updateUnreadBadges();
-
-    if (!document.getElementById('screen-chat').classList.contains('hidden')) {
-        renderCurrentChat();
+    // Обновляем списки и вью только если страница активна (экономим ресурсы)
+    if (!document.hidden) {
+        buildChatsList();
+        updatePreviews();
+        updateUnreadBadges();
+        if (!document.getElementById('screen-chat').classList.contains('hidden')) {
+            renderCurrentChat();
+        }
     }
 }
 
@@ -517,12 +513,9 @@ async function syncPendingMessages(pendingList) {
             myMessagesSha = data.sha;
             myHistory = JSON.parse(btoa_to_utf8(data.content));
             
-            pendingList.forEach(m => {
-                m.isPending = false;
-                myHistory.push({ user: m.user, to: m.to, text: m.text, time: m.time });
-            });
-
+            pendingList.forEach(m => { m.isPending = false; myHistory.push({ user: m.user, to: m.to, text: m.text, time: m.time }); });
             const newContent = utf8_to_btoa(JSON.stringify(myHistory));
+
             await fetch(url, {
                 method: 'PUT',
                 headers: { 'Authorization': `Bearer ${CONFIG.token}`, 'Content-Type': 'application/json' },
@@ -534,6 +527,13 @@ async function syncPendingMessages(pendingList) {
 
 function buildChatsList() {
     const container = document.getElementById('chats-container');
+    if (!container) return;
+    
+    // Создаем текстовый слепок структуры, чтобы не перерисовывать DOM попусту
+    const currentStructureHash = CONFIG.users.join(',');
+    if (container.children.length === CONFIG.users.length && container.dataset.hash === currentStructureHash) return;
+    container.dataset.hash = currentStructureHash;
+
     const sortedUsers = [...CONFIG.users].sort((a, b) => {
         if (a === CONFIG.username) return -1;
         if (b === CONFIG.username) return 1;
@@ -578,9 +578,7 @@ function updateUnreadBadges() {
         if (badgeContainer) {
             if (unreadCount > 0 && user !== activeChatUser) {
                 badgeContainer.innerHTML = `<div class="unread-badge">${unreadCount}</div>`;
-            } else {
-                badgeContainer.innerHTML = '';
-            }
+            } else { badgeContainer.innerHTML = ''; }
         }
     });
 }
@@ -615,17 +613,12 @@ function openChatWith(user) {
     const titleEl = document.getElementById('active-chat-title');
     if (titleEl) titleEl.innerText = (user === CONFIG.username) ? "Избранное" : user;
     showScreen('screen-chat');
-    renderCurrentChat();
-    updateUnreadBadges();
 }
 
 function exitChat() {
     if (activeChatUser) localStorage.setItem('last_view_' + activeChatUser, new Date().toISOString());
     activeChatUser = null;
     showScreen('screen-list');
-    buildChatsList();
-    updatePreviews();
-    updateUnreadBadges();
 }
 
 function updatePreviews() {
@@ -653,6 +646,11 @@ function renderCurrentChat() {
         if (isSelfChat) return m.user === CONFIG.username && m.to === CONFIG.username;
         return (m.user === CONFIG.username && m.to === activeChatUser) || (m.user === activeChatUser && m.to === CONFIG.username);
     });
+
+    // УМНАЯ ПРОВЕРКА: Считаем хэш текущего состояния данных чата
+    const currentChatHash = chatHistory.map(m => `${m.time}-${m.isPending}-${m.text.length}`).join('|');
+    if (currentChatHash === lastRenderedHash) return; // Данные не изменились — не перерисовываем DOM (нет мерцанию!)
+    lastRenderedHash = currentChatHash;
 
     const isAtBottom = container.scrollHeight - container.scrollTop <= container.clientHeight + 120;
     container.innerHTML = '';
@@ -706,7 +704,6 @@ async function sendMessage() {
     localStorage.setItem('gitchat_messages_cache', JSON.stringify(allMessagesCache));
     renderCurrentChat();
     scrollChatBottom();
-    updatePreviews();
 
     const url = `https://api.github.com/repos/${CONFIG.repo}/contents/${CONFIG.username}.json`;
     let myHistory = [];

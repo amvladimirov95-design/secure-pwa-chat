@@ -19,6 +19,7 @@
             --my-msg: #2b5278;
             --other-msg: #182533;
             --msg-selected: #314357;
+            --fav-star: #eff3f6;
         }
 
         body { 
@@ -35,17 +36,17 @@
         .screen {
             display: flex;
             flex-direction: column;
-            width: 100%;
+            width: 100vw;
             height: 100dvh;
             position: absolute;
             top: 0;
             left: 0;
             background: var(--bg-main);
+            box-sizing: border-box;
         }
 
         .hidden { display: none !important; }
 
-        /* Фиксированная шапка в стиле TG */
         .header {
             background: var(--bg-dark);
             height: 56px;
@@ -56,14 +57,11 @@
             border-bottom: 1px solid #101924;
             justify-content: space-between;
             box-sizing: border-box;
-            position: fixed;
-            top: 0;
             width: 100%;
-            z-index: 10;
         }
 
         .header-title { font-size: 17px; font-weight: 600; text-transform: capitalize; }
-        .header-btn { background: none; border: none; color: var(--accent); font-size: 16px; font-weight: 500; cursor: pointer; padding: 4px 8px; display: flex; align-items: center; }
+        .header-btn { background: none; border: none; color: var(--accent); font-size: 20px; cursor: pointer; padding: 4px 8px; display: flex; align-items: center; }
 
         /* ВХОД */
         .login-container {
@@ -71,7 +69,7 @@
             flex-direction: column;
             justify-content: center;
             align-items: center;
-            height: 100dvh;
+            height: 100%;
             padding: 30px;
             box-sizing: border-box;
         }
@@ -86,8 +84,8 @@
             border-radius: 8px; font-size: 15px; font-weight: 600; cursor: pointer; margin-top: 8px;
         }
 
-        /* СПИСОК ЧАТОВ (с отступом под шапку) */
-        .chats-list { flex: 1; overflow-y: auto; margin-top: 56px; }
+        /* СПИСОК ЧАТОВ */
+        .chats-list { flex: 1; overflow-y: auto; position: relative; }
         .chat-item { display: flex; align-items: center; padding: 10px 16px; border-bottom: 1px solid #101924; cursor: pointer; }
         .chat-item:active { background: var(--bg-active); }
         
@@ -95,14 +93,23 @@
             width: 46px; height: 46px; background: #5288c1; border-radius: 50%;
             display: flex; align-items: center; justify-content: center; font-weight: 600; font-size: 16px; margin-right: 12px; color: #fff;
         }
+        /* Особый стиль для аватарки Избранного */
+        .avatar.favorites { background: #2a87ce; font-size: 20px; color: var(--fav-star); }
+
         .chat-info { flex: 1; overflow: hidden; }
         .chat-name { font-size: 15px; font-weight: 600; margin-bottom: 3px; text-transform: capitalize; }
         .chat-preview { font-size: 13px; color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
-        /* ОКНО ДИАЛОГА (с отступами под шапку и панель ввода) */
+        .fab-btn {
+            position: absolute; bottom: 20px; right: 20px; width: 56px; height: 56px;
+            background: var(--accent); border-radius: 50%; display: flex; align-items: center;
+            justify-content: center; font-size: 22px; color: white; border: none; cursor: pointer;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.3); z-index: 5;
+        }
+
+        /* ОКНО ДИАЛОГА */
         #messages-container {
             flex: 1; overflow-y: auto; padding: 16px; display: flex; flex-direction: column;
-            margin-top: 56px; margin-bottom: 60px;
             background: url('https://user-images.githubusercontent.com/15075759/28719144-86dc0f70-73b1-11e7-911d-60d70fcded21.png');
             background-color: var(--bg-main);
         }
@@ -116,35 +123,46 @@
         }
         .msg-row.me .msg-bubble { background: var(--my-msg); border-bottom-right-radius: 3px; }
         .msg-row.other .msg-bubble { background: var(--other-msg); border-bottom-left-radius: 3px; }
-        
-        /* Подсветка выделенного сообщения */
         .msg-bubble.selected { background: var(--msg-selected) !important; }
 
         .msg-author { font-size: 12px; font-weight: 600; color: var(--accent); margin-bottom: 2px; text-transform: capitalize; }
-        
-        /* Блок метаданных (время + одна галочка) */
         .msg-meta { display: inline-flex; align-items: center; float: right; margin-top: 4px; margin-left: 8px; font-size: 11px; color: var(--text-muted); }
         .msg-check { margin-left: 4px; color: #52c41a; font-weight: bold; }
 
-        /* Панель ввода зафиксирована внизу */
         .input-panel { 
             background: var(--bg-dark); padding: 10px 12px; display: flex; align-items: center; 
-            box-sizing: border-box; position: fixed; bottom: 0; width: 100%; height: 60px; z-index: 10;
+            box-sizing: border-box; width: 100%; height: 60px; border-top: 1px solid #101924;
         }
         .message-input { flex: 1; background: #1f2933; border: none; color: var(--text-main); padding: 10px 16px; border-radius: 20px; font-size: 14.5px; outline: none; }
         .send-btn { background: none; border: none; color: var(--accent); font-size: 22px; margin-left: 8px; cursor: pointer; padding: 0 4px; }
 
-        /* Контекстное меню "Копировать" */
+        /* Модальные окна */
+        .modal-overlay {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.6);
+            display: flex; justify-content: center; align-items: center; z-index: 200;
+        }
+        .modal-content {
+            background: var(--bg-dark); border-radius: 14px; width: 85%; max-width: 320px; padding: 20px;
+            box-sizing: border-box; text-align: center; border: 1px solid #202b36;
+        }
+        .modal-title { font-size: 18px; font-weight: 600; margin-bottom: 16px; }
+        .modal-btn-danger {
+            width: 100%; padding: 12px; background: #e53935; color: white; border: none;
+            border-radius: 8px; font-size: 15px; font-weight: 600; cursor: pointer; margin-top: 15px;
+        }
+        .modal-btn-cancel {
+            width: 100%; padding: 12px; background: transparent; color: var(--text-muted); border: none;
+            font-size: 15px; cursor: pointer; margin-top: 8px;
+        }
+
+        /* Контекстное меню */
         .context-menu {
             position: absolute; background: #182533; border: 1px solid #202b36; border-radius: 8px;
             box-shadow: 0 4px 12px rgba(0,0,0,0.5); z-index: 100; display: none; padding: 4px 0;
         }
-        .context-menu-item {
-            padding: 8px 20px; font-size: 14px; cursor: pointer; color: var(--text-main); display: flex; align-items: center; gap: 8px;
-        }
+        .context-menu-item { padding: 8px 20px; font-size: 14px; cursor: pointer; color: var(--text-main); }
         .context-menu-item:hover { background: var(--bg-active); }
 
-        /* Всплывающий тост об успешном копировании */
         .toast {
             position: fixed; bottom: 80px; left: 50%; transform: translateX(-50%);
             background: rgba(14, 22, 33, 0.9); color: #fff; padding: 8px 16px;
@@ -167,10 +185,14 @@
 
     <div id="screen-list" class="screen hidden">
         <div class="header">
+            <button class="header-btn" onclick="openModal('modal-settings')">⚙️</button>
             <div class="header-title">GitChat</div>
-            <button class="header-btn" onclick="logout()">Выйти 🚪</button>
+            <div style="width: 40px;"></div>
         </div>
-        <div id="chats-container" class="chats-list"></div>
+        <div class="chats-list">
+            <div id="chats-container"></div>
+            <button class="fab-btn" onclick="openModal('modal-newchat')" title="Новый чат">📝</button>
+        </div>
     </div>
 
     <div id="screen-chat" class="screen hidden">
@@ -183,6 +205,27 @@
         <div class="input-panel">
             <input type="text" id="msg-input" class="message-input" placeholder="Сообщение...">
             <button onclick="sendMessage()" class="send-btn">➔</button>
+        </div>
+    </div>
+
+    <div id="modal-settings" class="modal-overlay hidden" onclick="closeModal('modal-settings')">
+        <div class="modal-content" onclick="event.stopPropagation()">
+            <div class="modal-title">Настройки аккаунта</div>
+            <div id="settings-info" style="color: var(--text-muted); font-size: 14px; margin-bottom: 10px;"></div>
+            <button class="modal-btn-danger" onclick="logout()">Выйти из профиля 🚪</button>
+            <button class="modal-btn-cancel" onclick="closeModal('modal-settings')">Закрыть</button>
+        </div>
+    </div>
+
+    <div id="modal-newchat" class="modal-overlay hidden" onclick="closeModal('modal-newchat')">
+        <div class="modal-content" onclick="event.stopPropagation()">
+            <div class="modal-title">Создать новый чат</div>
+            <input type="text" id="newchat-username" class="login-input" placeholder="Ник собеседника" style="margin-bottom: 5px;">
+            <div style="font-size: 11px; color: var(--text-muted); margin-bottom: 15px; text-align: left; padding: 0 5px;">
+                * В репозитории автоматически создастся пустой файл для этого пользователя.
+            </div>
+            <button class="login-btn" style="width:100%; margin:0;" onclick="createNewChatFile()">Создать диалог</button>
+            <button class="modal-btn-cancel" onclick="closeModal('modal-newchat')">Отмена</button>
         </div>
     </div>
 
@@ -210,6 +253,8 @@ window.onload = function() {
         CONFIG.repo = localStorage.getItem('gitchat_repo');
         CONFIG.username = localStorage.getItem('gitchat_username');
         
+        document.getElementById('settings-info').innerText = `Вы зашли как: ${CONFIG.username}\nРепозиторий: ${CONFIG.repo}`;
+        
         showScreen('screen-list');
         loadAllMessages();
         setInterval(loadAllMessages, 4000);
@@ -229,6 +274,9 @@ function showScreen(screenId) {
     }
 }
 
+function openModal(id) { document.getElementById(id).classList.remove('hidden'); }
+function closeModal(id) { document.getElementById(id).classList.add('hidden'); }
+
 function handleLogin() {
     const repo = document.getElementById('login-repo').value.trim();
     const username = document.getElementById('login-username').value.trim().toLowerCase();
@@ -244,6 +292,8 @@ function handleLogin() {
     CONFIG.username = username;
     CONFIG.token = token;
 
+    document.getElementById('settings-info').innerText = `Вы зашли как: ${CONFIG.username}\nРепозиторий: ${CONFIG.repo}`;
+
     showScreen('screen-list');
     loadAllMessages();
     setInterval(loadAllMessages, 4000);
@@ -252,7 +302,6 @@ function handleLogin() {
 async function loadAllMessages() {
     if (document.hidden || !CONFIG.token) return;
 
-    // Автоматически формируем список участников на основе обнаруженных файлов
     const url = `https://api.github.com/repos/${CONFIG.repo}/contents/`;
     try {
         const response = await fetch(url, { headers: { 'Authorization': `Bearer ${CONFIG.token}` } });
@@ -262,9 +311,7 @@ async function loadAllMessages() {
         const jsonFiles = files.filter(f => f.name.endsWith('.json')).map(f => f.name.replace('.json', ''));
         CONFIG.users = jsonFiles;
         
-        if (document.getElementById('screen-list').classList.contains('hidden') === false && document.getElementById('chats-container').children.length === 0) {
-            buildChatsList();
-        }
+        buildChatsList();
     } catch (e) { console.error(e); }
 
     let loadedMessages = [];
@@ -295,40 +342,63 @@ async function loadAllMessages() {
 
 function buildChatsList() {
     const container = document.getElementById('chats-container');
-    container.innerHTML = '';
-    CONFIG.users.forEach(user => {
-        if (user === CONFIG.username) return;
-        const item = document.createElement('div');
-        item.className = 'chat-item';
-        item.onclick = () => openChatWith(user);
-        item.innerHTML = `
-            <div class="avatar">${user.substring(0,2).toUpperCase()}</div>
-            <div class="chat-info">
-                <div class="chat-name">${user}</div>
-                <div class="chat-preview" id="preview-${user}">Нет сообщений</div>
-            </div>
-        `;
-        container.appendChild(item);
+    const existingCount = container.children.length;
+    
+    // Сортируем пользователей так, чтобы наше "Избранное" (свой ник) всегда шло в самом верху списка
+    const sortedUsers = [...CONFIG.users].sort((a, b) => {
+        if (a === CONFIG.username) return -1;
+        if (b === CONFIG.username) return 1;
+        return a.localeCompare(b);
     });
+    
+    if (existingCount !== sortedUsers.length) {
+        container.innerHTML = '';
+        sortedUsers.forEach(user => {
+            const item = document.createElement('div');
+            item.className = 'chat-item';
+            item.onclick = () => openChatWith(user);
+
+            const isSelf = user === CONFIG.username;
+            const displayName = isSelf ? "Избранное" : user;
+            const avatarHtml = isSelf ? `<div class="avatar favorites">⭐</div>` : `<div class="avatar">${user.substring(0,2).toUpperCase()}</div>`;
+
+            item.innerHTML = `
+                ${avatarHtml}
+                <div class="chat-info">
+                    <div class="chat-name">${displayName}</div>
+                    <div class="chat-preview" id="preview-${user}">Нет сообщений</div>
+                </div>
+            `;
+            container.appendChild(item);
+        });
+    }
 }
 
 function openChatWith(user) {
     activeChatUser = user;
-    document.getElementById('active-chat-title').innerText = user;
+    document.getElementById('active-chat-title').innerText = (user === CONFIG.username) ? "Избранное" : user;
     showScreen('screen-chat');
     renderCurrentChat();
 }
 
 function updatePreviews() {
     CONFIG.users.forEach(user => {
-        if (user === CONFIG.username) return;
-        const subHistory = allMessagesCache.filter(m => 
-            (m.user === CONFIG.username && m.to === user) || (m.user === user && m.to === CONFIG.username)
-        );
+        const isSelf = user === CONFIG.username;
+        
+        // Для Избранного фильтруем только те сообщения, где и отправитель, и получатель — вы сами
+        const subHistory = allMessagesCache.filter(m => {
+            if (isSelf) {
+                return m.user === CONFIG.username && m.to === CONFIG.username;
+            } else {
+                return (m.user === CONFIG.username && m.to === user) || (m.user === user && m.to === CONFIG.username);
+            }
+        });
+        
         const previewEl = document.getElementById(`preview-${user}`);
         if (previewEl && subHistory.length > 0) {
             const last = subHistory[subHistory.length - 1];
-            previewEl.innerText = `${last.user === CONFIG.username ? 'Вы: ' : ''}${last.text}`;
+            // В избранном приставка "Вы: " не нужна
+            previewEl.innerText = isSelf ? last.text : `${last.user === CONFIG.username ? 'Вы: ' : ''}${last.text}`;
         }
     });
 }
@@ -336,21 +406,26 @@ function updatePreviews() {
 function renderCurrentChat() {
     if (!activeChatUser) return;
     const container = document.getElementById('messages-container');
+    const isSelfChat = activeChatUser === CONFIG.username;
     
-    const chatHistory = allMessagesCache.filter(m => 
-        (m.user === CONFIG.username && m.to === activeChatUser) || (m.user === activeChatUser && m.to === CONFIG.username)
-    );
+    const chatHistory = allMessagesCache.filter(m => {
+        if (isSelfChat) {
+            return m.user === CONFIG.username && m.to === CONFIG.username;
+        } else {
+            return (m.user === CONFIG.username && m.to === activeChatUser) || (m.user === activeChatUser && m.to === CONFIG.username);
+        }
+    });
 
     const isAtBottom = container.scrollHeight - container.scrollTop <= container.clientHeight + 120;
-    
-    // Сохраняем ID выделенного элемента, чтобы не сбросить подсветку при обновлении
     const prevSelectedText = selectedTextToCopy;
 
     container.innerHTML = '';
     chatHistory.forEach(m => {
         const row = document.createElement('div');
         const isMe = m.user === CONFIG.username;
-        row.className = `msg-row ${isMe ? 'me' : 'other'}`;
+        
+        // В Избранном все сообщения визуально идут по правому краю (как ваши)
+        row.className = `msg-row ${isSelfChat ? 'me' : (isMe ? 'me' : 'other')}`;
         
         let timeStr = '';
         if (m.time) {
@@ -365,14 +440,13 @@ function renderCurrentChat() {
             currentSelectedBubble = bubble;
         }
 
-        // Предотвращаем закрытие меню при клике на само облачко и вызываем контекстное меню
         bubble.onclick = (e) => {
             e.stopPropagation();
             openContextMenu(e, bubble, m.text);
         };
 
         bubble.innerHTML = `
-            ${!isMe ? `<div class="msg-author">${m.user}</div>` : ''}
+            ${(!isMe && !isSelfChat) ? `<div class="msg-author">${m.user}</div>` : ''}
             <span class="msg-text">${m.text}</span>
             <div class="msg-meta">
                 <span>${timeStr}</span>
@@ -409,13 +483,7 @@ async function sendMessage() {
             myHistory = JSON.parse(decodeURIComponent(escape(atob(data.content))));
         }
 
-        myHistory.push({
-            user: CONFIG.username,
-            to: activeChatUser,
-            text: text,
-            time: new Date().toISOString()
-        });
-
+        myHistory.push({ user: CONFIG.username, to: activeChatUser, text: text, time: new Date().toISOString() });
         const newContent = btoa(unescape(encodeURIComponent(JSON.stringify(myHistory))));
 
         await fetch(url, {
@@ -428,10 +496,49 @@ async function sendMessage() {
     } catch (err) { console.error(err); }
 }
 
-// Управление контекстным меню
+async function createNewChatFile() {
+    const newUser = document.getElementById('newchat-username').value.trim().toLowerCase();
+    if (!newUser) return alert('Введите имя пользователя!');
+    
+    if (newUser === CONFIG.username) {
+        alert('Это ваш ник! Открываем Избранное.');
+        closeModal('modal-newchat');
+        document.getElementById('newchat-username').value = '';
+        openChatWith(CONFIG.username);
+        return;
+    }
+    
+    closeModal('modal-newchat');
+    document.getElementById('newchat-username').value = '';
+
+    const url = `https://api.github.com/repos/${CONFIG.repo}/contents/${newUser}.json`;
+    
+    try {
+        const checkRes = await fetch(url, { headers: { 'Authorization': `Bearer ${CONFIG.token}` } });
+        if (checkRes.ok) {
+            alert('Такой диалог уже существует в списке!');
+            openChatWith(newUser);
+            return;
+        }
+
+        const emptyContent = btoa(JSON.stringify([]));
+        const res = await fetch(url, {
+            method: 'PUT',
+            headers: { 'Authorization': `Bearer ${CONFIG.token}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ message: `create_chat_${newUser}`, content: emptyContent })
+        });
+
+        if (res.ok) {
+            alert(`Диалог с ${newUser} успешно создан!`);
+            loadAllMessages();
+        } else {
+            alert('Ошибка при создании файла на GitHub.');
+        }
+    } catch (e) { console.error(e); }
+}
+
 function openContextMenu(e, bubble, text) {
     closeContextMenu();
-
     currentSelectedBubble = bubble;
     currentSelectedBubble.classList.add('selected');
     selectedTextToCopy = text;
@@ -439,7 +546,6 @@ function openContextMenu(e, bubble, text) {
     const menu = document.getElementById('msg-context-menu');
     menu.style.display = 'block';
 
-    // Позиционируем меню рядом с облачком (с защитой от вылета за края экрана)
     const rect = bubble.getBoundingClientRect();
     let topPosition = rect.top + window.scrollY - 45;
     let leftPosition = rect.left + (rect.width / 2) - 60;
@@ -455,6 +561,7 @@ function closeContextMenu() {
     const menu = document.getElementById('msg-context-menu');
     if (menu) menu.style.display = 'none';
     if (currentSelectedBubble) {
+        currentSelectedBubble.classList.remove('remove');
         currentSelectedBubble.classList.remove('selected');
         currentSelectedBubble = null;
     }
@@ -463,19 +570,16 @@ function closeContextMenu() {
 
 function copySelectedText() {
     if (!selectedTextToCopy) return;
-    
     navigator.clipboard.writeText(selectedTextToCopy).then(() => {
         showToast();
         closeContextMenu();
-    }).catch(err => console.error('Ошибка копирования: ', err));
+    }).catch(err => console.error(err));
 }
 
 function showToast() {
     const toast = document.getElementById('toast');
     toast.style.opacity = '1';
-    setTimeout(() => {
-        toast.style.opacity = '0';
-    }, 1500);
+    setTimeout(() => { toast.style.opacity = '0'; }, 1500);
 }
 
 function logout() {

@@ -35,7 +35,6 @@
             height: 100vh;
         }
 
-        /* Главный каркас приложения с динамическим контролем высоты */
         .screen {
             display: flex;
             flex-direction: column;
@@ -50,7 +49,6 @@
 
         .hidden { display: none !important; }
 
-        /* Шапка жестко зафиксирована в flex-потоке */
         .header {
             background: var(--bg-dark);
             height: 56px;
@@ -65,6 +63,16 @@
         }
 
         .header-title { font-size: 17px; font-weight: 600; text-transform: capitalize; }
+        
+        /* Стили для статуса подключения */
+        .status-connecting { color: var(--text-muted); font-size: 15px; font-weight: normal; }
+        .spinner {
+            display: inline-block; width: 12px; height: 12px; 
+            border: 2px solid rgba(255,255,255,0.2); border-top-color: var(--accent); 
+            border-radius: 50%; animation: spin 1s infinite linear; margin-right: 6px;
+        }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+
         .header-btn { background: none; border: none; color: var(--accent); font-size: 20px; cursor: pointer; padding: 4px 8px; display: flex; align-items: center; }
 
         /* ВХОД */
@@ -103,7 +111,6 @@
         .chat-name { font-size: 15px; font-weight: 600; margin-bottom: 3px; text-transform: capitalize; }
         .chat-preview { font-size: 13px; color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
-        /* Кнопка ПЛЮС в стиле ТГ */
         .fab-btn {
             position: absolute; bottom: 20px; right: 20px; width: 56px; height: 56px;
             background: var(--accent); border-radius: 50%; display: flex; align-items: center;
@@ -131,7 +138,9 @@
 
         .msg-author { font-size: 12px; font-weight: 600; color: var(--accent); margin-bottom: 2px; text-transform: capitalize; }
         .msg-meta { display: inline-flex; align-items: center; float: right; margin-top: 4px; margin-left: 8px; font-size: 11px; color: var(--text-muted); }
-        .msg-check { margin-left: 4px; color: #52c41a; font-weight: bold; }
+        .msg-check { margin-left: 4px; font-size: 11px; }
+        .msg-check.sent { color: #52c41a; font-weight: bold; }
+        .msg-check.pending { color: var(--text-muted); }
 
         /* Нижняя панель */
         .input-panel { 
@@ -152,8 +161,7 @@
         }
         .modal-title { font-size: 18px; font-weight: 600; margin-bottom: 16px; }
         
-        /* Список пользователей внутри модалки плюса */
-        .modal-users-list { overflow-y: auto; flex: 1; max-height: 250px; margin-bottom: 15px; border-radius: 8px; background: var(--bg-main); }
+        .modal-users-list { overflow-y: auto; flex: 1; max-height: 250px; margin-bottom: 15px; border-radius: 8px; background: var(--bg-main); color: var(--text-main); }
         .modal-user-item { padding: 12px; text-align: left; border-bottom: 1px solid #101924; cursor: pointer; font-size: 15px; text-transform: capitalize; }
         .modal-user-item:active { background: var(--bg-active); }
 
@@ -166,7 +174,6 @@
             font-size: 15px; cursor: pointer; margin-top: 8px;
         }
 
-        /* Контекстное меню */
         .context-menu {
             position: absolute; background: #182533; border: 1px solid #202b36; border-radius: 8px;
             box-shadow: 0 4px 12px rgba(0,0,0,0.5); z-index: 100; display: none; padding: 4px 0;
@@ -187,7 +194,7 @@
         <div class="login-container">
             <div class="login-logo">💬</div>
             <div class="login-title">Вход в GitChat</div>
-            <input type="text" id="login-repo" class="login-input" placeholder="Репозиторий (username/repo)">
+            <input type="text" id="login-repo" class="login-input" value="amvladimirov95-design/gitchat-storage" placeholder="Репозиторий (username/repo)">
             <input type="text" id="login-username" class="login-input" placeholder="Ваш Ник">
             <input type="password" id="login-token" class="login-input" placeholder="GitHub Токен">
             <button class="login-btn" onclick="handleLogin()">Продолжить</button>
@@ -197,7 +204,7 @@
     <div id="screen-list" class="screen hidden">
         <div class="header">
             <button class="header-btn" onclick="openModal('modal-settings')">⚙️</button>
-            <div class="header-title">GitChat</div>
+            <div class="header-title" id="main-header-title">GitChat</div>
             <div style="width: 40px;"></div>
         </div>
         <div class="chats-list">
@@ -231,9 +238,7 @@
     <div id="modal-newchat" class="modal-overlay hidden" onclick="closeModal('modal-newchat')">
         <div class="modal-content" onclick="event.stopPropagation()">
             <div class="modal-title">Начать чат</div>
-            
             <div class="modal-users-list" id="modal-registered-users"></div>
-            
             <div style="border-top: 1px solid #202b36; padding-top: 10px; margin-top: 5px;">
                 <input type="text" id="newchat-username" class="login-input" placeholder="Или введите новый ник">
                 <button class="login-btn" style="width:100%; margin:0;" onclick="createNewChatFile()">Добавить по нику</button>
@@ -253,39 +258,61 @@ if ('serviceWorker' in navigator) {
     navigator.serviceWorker.register('./sw.js').catch(err => console.error(err));
 }
 
-let CONFIG = { token: '', repo: '', username: '', users: [] };
+let CONFIG = { token: '', repo: 'amvladimirov95-design/gitchat-storage', username: '', users: [] };
 let myMessagesSha = '';
 let allMessagesCache = [];
 let activeChatUser = null;
 let selectedTextToCopy = "";
 let currentSelectedBubble = null;
+let isOnlineStatus = true;
 
 // Фикс высоты под клавиатуру смартфона
 if (window.visualViewport) {
     window.visualViewport.addEventListener('resize', () => {
         const height = window.visualViewport.height;
-        document.querySelectorAll('.screen').forEach(el => {
-            el.style.height = height + 'px';
-        });
-        if (!document.getElementById('screen-chat').classList.contains('hidden')) {
-            scrollChatBottom();
-        }
+        document.querySelectorAll('.screen').forEach(el => { el.style.height = height + 'px'; });
+        if (!document.getElementById('screen-chat').classList.contains('hidden')) { scrollChatBottom(); }
     });
 }
 
 window.onload = function() {
+    // Инициализируем локальный кэш из памяти телефона, чтобы показать историю мгновенно в офлайне
+    const cachedMessages = localStorage.getItem('gitchat_messages_cache');
+    if (cachedMessages) { allMessagesCache = JSON.parse(cachedMessages); }
+    
+    const cachedUsers = localStorage.getItem('gitchat_users_cache');
+    if (cachedUsers) { CONFIG.users = JSON.parse(cachedUsers); }
+
     if (localStorage.getItem('gitchat_token')) {
         CONFIG.token = localStorage.getItem('gitchat_token');
-        CONFIG.repo = localStorage.getItem('gitchat_repo');
+        CONFIG.repo = localStorage.getItem('gitchat_repo') || 'amvladimirov95-design/gitchat-storage';
         CONFIG.username = localStorage.getItem('gitchat_username');
         
         document.getElementById('settings-info').innerText = `Вы зашли как: ${CONFIG.username}\nРепозиторий: ${CONFIG.repo}`;
         
         showScreen('screen-list');
+        buildChatsList();
+        updatePreviews();
+        
+        // Первый запуск синхронизации
         loadAllMessages();
         setInterval(loadAllMessages, 4000);
     } else {
         showScreen('screen-login');
+    }
+}
+
+function updateHeaderStatus(online) {
+    isOnlineStatus = online;
+    const titleEl = document.getElementById('main-header-title');
+    if (!titleEl) return;
+
+    if (online) {
+        titleEl.innerHTML = "GitChat";
+        titleEl.className = "header-title";
+    } else {
+        titleEl.innerHTML = `<span class="spinner"></span><span class="status-connecting">Соединение...</span>`;
+        titleEl.className = "header-title display-flex align-items-center";
     }
 }
 
@@ -297,39 +324,48 @@ function showScreen(screenId) {
     const targetScreen = document.getElementById(screenId);
     targetScreen.classList.remove('hidden');
     
-    // Принудительно выставляем высоту текущего вьюпорта
-    if (window.visualViewport) {
-        targetScreen.style.height = window.visualViewport.height + 'px';
-    }
-
-    if (screenId === 'screen-chat') {
-        closeContextMenu();
-        scrollChatBottom();
-    }
+    if (window.visualViewport) { targetScreen.style.height = window.visualViewport.height + 'px'; }
+    if (screenId === 'screen-chat') { closeContextMenu(); scrollChatBottom(); }
 }
 
 function openModal(id) { document.getElementById(id).classList.remove('hidden'); }
 function closeModal(id) { document.getElementById(id).classList.add('hidden'); }
 
-function handleLogin() {
+async function handleLogin() {
     const repo = document.getElementById('login-repo').value.trim();
     const username = document.getElementById('login-username').value.trim().toLowerCase();
     const token = document.getElementById('login-token').value.trim();
 
     if (!repo || !username || !token) return alert('Заполните все поля!');
 
-    localStorage.setItem('gitchat_repo', repo);
-    localStorage.setItem('gitchat_username', username);
-    localStorage.setItem('gitchat_token', token);
-
     CONFIG.repo = repo;
     CONFIG.username = username;
     CONFIG.token = token;
 
+    const userFileUrl = `https://api.github.com/repos/${repo}/contents/${username}.json`;
+    try {
+        const resCheck = await fetch(userFileUrl, { headers: { 'Authorization': `Bearer ${token}` } });
+        if (resCheck.status === 404) {
+            const emptyContent = btoa(JSON.stringify([]));
+            await fetch(userFileUrl, {
+                method: 'PUT',
+                headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+                body: JSON.stringify({ message: `initial_registration_${username}`, content: emptyContent })
+            });
+        }
+    } catch (err) {
+        console.error(err);
+        return alert('Не удалось соединиться с GitHub. Проверьте репозиторий и токен!');
+    }
+
+    localStorage.setItem('gitchat_repo', repo);
+    localStorage.setItem('gitchat_username', username);
+    localStorage.setItem('gitchat_token', token);
+
     document.getElementById('settings-info').innerText = `Вы зашли как: ${CONFIG.username}\nРепозиторий: ${CONFIG.repo}`;
 
     showScreen('screen-list');
-    loadAllMessages();
+    await loadAllMessages();
     setInterval(loadAllMessages, 4000);
 }
 
@@ -337,16 +373,23 @@ async function loadAllMessages() {
     if (document.hidden || !CONFIG.token) return;
 
     const url = `https://api.github.com/repos/${CONFIG.repo}/contents/`;
+    let files = [];
     try {
         const response = await fetch(url, { headers: { 'Authorization': `Bearer ${CONFIG.token}` } });
-        if (!response.ok) return;
-        const files = await response.json();
-        
-        const jsonFiles = files.filter(f => f.name.endsWith('.json')).map(f => f.name.replace('.json', ''));
-        CONFIG.users = jsonFiles;
-        
-        buildChatsList();
-    } catch (e) { console.error(e); }
+        if (!response.ok) { throw new Error("GitHub Error"); }
+        files = await response.json();
+        updateHeaderStatus(true); // Успешно подключились!
+    } catch (e) { 
+        console.error("Офлайн режим или ошибка сети:", e);
+        updateHeaderStatus(false); // Включаем плашку "Соединение..."
+        return; // Работаем на старых закэшированных данных
+    }
+
+    const jsonFiles = files.filter(f => f.name.endsWith('.json')).map(f => f.name.replace('.json', ''));
+    CONFIG.users = jsonFiles;
+    localStorage.setItem('gitchat_users_cache', JSON.stringify(jsonFiles));
+    
+    buildChatsList();
 
     let loadedMessages = [];
     const requests = CONFIG.users.map(async (user) => {
@@ -359,19 +402,63 @@ async function loadAllMessages() {
             if (user === CONFIG.username) myMessagesSha = data.sha;
 
             const content = JSON.parse(decodeURIComponent(escape(atob(data.content))));
-            if (Array.isArray(content)) loadedMessages = loadedMessages.concat(content);
+            if (Array.isArray(content)) {
+                // Все сообщения с сервера помечаем как доставленные (isPending = false)
+                content.forEach(m => m.isPending = false);
+                loadedMessages = loadedMessages.concat(content);
+            }
         } catch (err) { console.error(err); }
     });
 
     await Promise.all(requests);
+
+    // Добавляем локальные неотправленные сообщения из старого кэша, если они там были
+    const unsentLocal = allMessagesCache.filter(m => m.isPending && m.user === CONFIG.username);
+    
+    // Пытаемся автоматически доотправить их, если появилась сеть
+    if (unsentLocal.length > 0 && isOnlineStatus) {
+        syncPendingMessages(unsentLocal);
+    }
+
+    loadedMessages = loadedMessages.concat(unsentLocal.filter(l => !loadedMessages.some(m => m.time === l.time && m.text === l.text)));
+    
     loadedMessages.sort((a, b) => new Date(a.time) - new Date(b.time));
     allMessagesCache = loadedMessages;
+    
+    // Перезаписываем офлайн-зеркало в памяти телефона
+    localStorage.setItem('gitchat_messages_cache', JSON.stringify(allMessagesCache));
 
     updatePreviews();
 
     if (!document.getElementById('screen-chat').classList.contains('hidden')) {
         renderCurrentChat();
     }
+}
+
+// Функция фоновой доотправки сообщений при восстановлении сети
+async function syncPendingMessages(pendingList) {
+    const url = `https://api.github.com/repos/${CONFIG.repo}/contents/${CONFIG.username}.json`;
+    let myHistory = [];
+    try {
+        const response = await fetch(url, { headers: { 'Authorization': `Bearer ${CONFIG.token}` } });
+        if (response.ok) {
+            const data = await response.json();
+            myMessagesSha = data.sha;
+            myHistory = JSON.parse(decodeURIComponent(escape(atob(data.content))));
+            
+            pendingList.forEach(m => {
+                m.isPending = false; // Снимаем статус ожидания
+                myHistory.push({ user: m.user, to: m.to, text: m.text, time: m.time });
+            });
+
+            const newContent = btoa(unescape(encodeURIComponent(JSON.stringify(myHistory))));
+            await fetch(url, {
+                method: 'PUT',
+                headers: { 'Authorization': `Bearer ${CONFIG.token}`, 'Content-Type': 'application/json' },
+                body: JSON.stringify({ message: 'sync_offline_msg', content: newContent, sha: myMessagesSha })
+            });
+        }
+    } catch(e) { console.error("Не удалось синхронизировать:", e); }
 }
 
 function buildChatsList() {
@@ -407,15 +494,34 @@ function buildChatsList() {
     }
 }
 
-// Открытие модалки ПЛЮС со списком всех зарегистрированных в системе
-function openNewChatModal() {
+async function openNewChatModal() {
     const listContainer = document.getElementById('modal-registered-users');
+    listContainer.innerHTML = '<div style="padding:15px; color:var(--text-muted); font-size:14px;">Загрузка пользователей...</div>';
+    openModal('modal-newchat');
+
+    if (!CONFIG.token) return;
+
+    const url = `https://api.github.com/repos/${CONFIG.repo}/contents/`;
+    try {
+        const response = await fetch(url, { headers: { 'Authorization': `Bearer ${CONFIG.token}` } });
+        if (response.ok) {
+            const files = await response.json();
+            CONFIG.users = files.filter(f => f.name.endsWith('.json')).map(f => f.name.replace('.json', ''));
+        }
+    } catch (e) { console.error(e); }
+
     listContainer.innerHTML = '';
 
     if (CONFIG.users.length === 0) {
         listContainer.innerHTML = '<div style="padding:15px; color:var(--text-muted); font-size:14px;">Пользователей не найдено</div>';
     } else {
-        CONFIG.users.forEach(user => {
+        const sorted = [...CONFIG.users].sort((a, b) => {
+            if (a === CONFIG.username) return -1;
+            if (b === CONFIG.username) return 1;
+            return a.localeCompare(b);
+        });
+
+        sorted.forEach(user => {
             const isSelf = user === CONFIG.username;
             const item = document.createElement('div');
             item.className = 'modal-user-item';
@@ -427,7 +533,6 @@ function openNewChatModal() {
             listContainer.appendChild(item);
         });
     }
-    openModal('modal-newchat');
 }
 
 function openChatWith(user) {
@@ -441,11 +546,8 @@ function updatePreviews() {
     CONFIG.users.forEach(user => {
         const isSelf = user === CONFIG.username;
         const subHistory = allMessagesCache.filter(m => {
-            if (isSelf) {
-                return m.user === CONFIG.username && m.to === CONFIG.username;
-            } else {
-                return (m.user === CONFIG.username && m.to === user) || (m.user === user && m.to === CONFIG.username);
-            }
+            if (isSelf) { return m.user === CONFIG.username && m.to === CONFIG.username; } 
+            else { return (m.user === CONFIG.username && m.to === user) || (m.user === user && m.to === CONFIG.username); }
         });
         
         const previewEl = document.getElementById(`preview-${user}`);
@@ -462,11 +564,8 @@ function renderCurrentChat() {
     const isSelfChat = activeChatUser === CONFIG.username;
     
     const chatHistory = allMessagesCache.filter(m => {
-        if (isSelfChat) {
-            return m.user === CONFIG.username && m.to === CONFIG.username;
-        } else {
-            return (m.user === CONFIG.username && m.to === activeChatUser) || (m.user === activeChatUser && m.to === CONFIG.username);
-        }
+        if (isSelfChat) { return m.user === CONFIG.username && m.to === CONFIG.username; } 
+        else { return (m.user === CONFIG.username && m.to === activeChatUser) || (m.user === activeChatUser && m.to === CONFIG.username); }
     });
 
     const isAtBottom = container.scrollHeight - container.scrollTop <= container.clientHeight + 120;
@@ -496,12 +595,21 @@ function renderCurrentChat() {
             openContextMenu(e, bubble, m.text);
         };
 
+        // Логика галочек в стиле Телеграм
+        let checkMarkHtml = '✓'; // По умолчанию одна галочка
+        let checkClass = 'sent';
+        
+        if (m.isPending) {
+            checkMarkHtml = '🕒'; // Часики, если нет интернета и сообщение ждет отправки
+            checkClass = 'pending';
+        }
+
         bubble.innerHTML = `
             ${(!isMe && !isSelfChat) ? `<div class="msg-author">${m.user}</div>` : ''}
             <span class="msg-text">${m.text}</span>
             <div class="msg-meta">
                 <span>${timeStr}</span>
-                <span class="msg-check">✓</span>
+                ${isMe ? `<span class="msg-check ${checkClass}">${checkMarkHtml}</span>` : ''}
             </div>
         `;
         
@@ -523,6 +631,18 @@ async function sendMessage() {
     if (!text || !activeChatUser) return;
     input.value = '';
 
+    const timestamp = new Date().toISOString();
+    
+    // Создаем объект сообщения со статусом "в очереди" (isPending: true)
+    const localMsg = { user: CONFIG.username, to: activeChatUser, text: text, time: timestamp, isPending: true };
+    
+    // Мгновенно добавляем его на экран локально
+    allMessagesCache.push(localMsg);
+    localStorage.setItem('gitchat_messages_cache', JSON.stringify(allMessagesCache));
+    renderCurrentChat();
+    scrollChatBottom();
+    updatePreviews();
+
     const url = `https://api.github.com/repos/${CONFIG.repo}/contents/${CONFIG.username}.json`;
     let myHistory = [];
 
@@ -534,7 +654,10 @@ async function sendMessage() {
             myHistory = JSON.parse(decodeURIComponent(escape(atob(data.content))));
         }
 
-        myHistory.push({ user: CONFIG.username, to: activeChatUser, text: text, time: new Date().toISOString() });
+        // Если сеть есть, меняем статус на "отправлено"
+        localMsg.isPending = false;
+        myHistory.push({ user: CONFIG.username, to: activeChatUser, text: text, time: timestamp });
+        
         const newContent = btoa(unescape(encodeURIComponent(JSON.stringify(myHistory))));
 
         await fetch(url, {
@@ -543,8 +666,14 @@ async function sendMessage() {
             body: JSON.stringify({ message: 'm_send', content: newContent, sha: myMessagesSha || undefined })
         });
 
+        // Обновляем кэш чистыми данными с сервера
         loadAllMessages();
-    } catch (err) { console.error(err); }
+    } catch (err) { 
+        console.error("Сообщение сохранено локально. Будет отправлено при появлении сети.", err);
+        updateHeaderStatus(false);
+        // Перерисовываем чат, чтобы убедиться, что отображаются «часики»
+        renderCurrentChat();
+    }
 }
 
 async function createNewChatFile() {
@@ -565,10 +694,7 @@ async function createNewChatFile() {
     
     try {
         const checkRes = await fetch(url, { headers: { 'Authorization': `Bearer ${CONFIG.token}` } });
-        if (checkRes.ok) {
-            openChatWith(newUser);
-            return;
-        }
+        if (checkRes.ok) { openChatWith(newUser); return; }
 
         const emptyContent = btoa(JSON.stringify([]));
         const res = await fetch(url, {
@@ -577,12 +703,8 @@ async function createNewChatFile() {
             body: JSON.stringify({ message: `create_chat_${newUser}`, content: emptyContent })
         });
 
-        if (res.ok) {
-            await loadAllMessages();
-            openChatWith(newUser);
-        } else {
-            alert('Ошибка при создании файла на GitHub.');
-        }
+        if (res.ok) { await loadAllMessages(); openChatWith(newUser); } 
+        else { alert('Ошибка при создании файла на GitHub.'); }
     } catch (e) { console.error(e); }
 }
 

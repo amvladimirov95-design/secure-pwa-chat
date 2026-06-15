@@ -20,51 +20,35 @@
             --other-msg: #182533;
             --msg-selected: #314357;
             --fav-star: #eff3f6;
+            --unread-badge: #40a7e3;
         }
 
         body { 
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; 
             background: var(--bg-main); 
             color: var(--text-main); 
-            margin: 0; 
-            padding: 0; 
-            overflow: hidden;
-            -webkit-user-select: none;
-            position: fixed;
-            width: 100vw;
-            height: 100vh;
+            margin: 0; padding: 0; overflow: hidden;
+            -webkit-user-select: none; position: fixed;
+            width: 100vw; height: 100vh;
         }
 
         .screen {
-            display: flex;
-            flex-direction: column;
-            width: 100vw;
-            position: absolute;
-            top: 0;
-            left: 0;
-            background: var(--bg-main);
-            box-sizing: border-box;
-            overflow: hidden;
+            display: flex; flex-direction: column; width: 100vw;
+            position: absolute; top: 0; left: 0; background: var(--bg-main);
+            box-sizing: border-box; overflow: hidden;
         }
 
         .hidden { display: none !important; }
 
         .header {
-            background: var(--bg-dark);
-            height: 56px;
-            min-height: 56px;
-            display: flex;
-            align-items: center;
-            padding: 0 16px;
-            border-bottom: 1px solid #101924;
-            justify-content: space-between;
-            box-sizing: border-box;
-            width: 100%;
+            background: var(--bg-dark); height: 56px; min-height: 56px;
+            display: flex; align-items: center; padding: 0 16px;
+            border-bottom: 1px solid #101924; justify-content: space-between;
+            box-sizing: border-box; width: 100%;
         }
 
         .header-title { font-size: 17px; font-weight: 600; text-transform: capitalize; }
         
-        /* Стили для статуса подключения */
         .status-connecting { color: var(--text-muted); font-size: 15px; font-weight: normal; }
         .spinner {
             display: inline-block; width: 12px; height: 12px; 
@@ -77,13 +61,8 @@
 
         /* ВХОД */
         .login-container {
-            display: flex;
-            flex-direction: column;
-            justify-content: center;
-            align-items: center;
-            height: 100%;
-            padding: 30px;
-            box-sizing: border-box;
+            display: flex; flex-direction: column; justify-content: center; align-items: center;
+            height: 100%; padding: 30px; box-sizing: border-box;
         }
         .login-logo { font-size: 60px; margin-bottom: 16px; }
         .login-title { font-size: 20px; font-weight: 600; margin-bottom: 24px; }
@@ -98,7 +77,7 @@
 
         /* СПИСОК ЧАТОВ */
         .chats-list { flex: 1; overflow-y: auto; position: relative; }
-        .chat-item { display: flex; align-items: center; padding: 10px 16px; border-bottom: 1px solid #101924; cursor: pointer; }
+        .chat-item { display: flex; align-items: center; padding: 10px 16px; border-bottom: 1px solid #101924; cursor: pointer; position: relative; }
         .chat-item:active { background: var(--bg-active); }
         
         .avatar {
@@ -107,9 +86,17 @@
         }
         .avatar.favorites { background: #2a87ce; font-size: 20px; color: var(--fav-star); }
 
-        .chat-info { flex: 1; overflow: hidden; }
+        .chat-info { flex: 1; overflow: hidden; padding-right: 30px; }
         .chat-name { font-size: 15px; font-weight: 600; margin-bottom: 3px; text-transform: capitalize; }
         .chat-preview { font-size: 13px; color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+        /* Счетчик непрочитанных */
+        .unread-badge {
+            position: absolute; right: 20px; top: 50%; transform: translateY(-50%);
+            background: var(--unread-badge); color: #fff; font-size: 12px; font-weight: 600;
+            min-width: 20px; height: 20px; border-radius: 10px; display: flex; align-items: center;
+            justify-content: center; padding: 0 6px; box-sizing: border-box;
+        }
 
         .fab-btn {
             position: absolute; bottom: 20px; right: 20px; width: 56px; height: 56px;
@@ -215,7 +202,7 @@
 
     <div id="screen-chat" class="screen hidden">
         <div class="header">
-            <button class="header-btn" onclick="showScreen('screen-list')">◀ Назад</button>
+            <button class="header-btn" onclick="exitChat()">◀ Назад</button>
             <div class="header-title" id="active-chat-title">Чат</div>
             <div style="width: 60px;"></div>
         </div>
@@ -264,9 +251,38 @@ let allMessagesCache = [];
 let activeChatUser = null;
 let selectedTextToCopy = "";
 let currentSelectedBubble = null;
-let isOnlineStatus = true;
+let isOnlineStatus = navigator.onLine;
 
-// Фикс высоты под клавиатуру смартфона
+// Синтезатор звука (работает без аудиофайлов)
+function playNotificationSound() {
+    try {
+        const ctx = new (window.AudioContext || window.webkitAudioContext)();
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(587.33, ctx.currentTime);
+        osc.frequency.setValueAtTime(880, ctx.currentTime + 0.1);
+        gain.gain.setValueAtTime(0.1, ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.3);
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start();
+        osc.stop(ctx.currentTime + 0.3);
+    } catch(e) { console.error(e); }
+}
+
+// Отслеживание системных событий сети (мгновенное)
+window.addEventListener('online', () => updateHeaderStatus(true));
+window.addEventListener('offline', () => updateHeaderStatus(false));
+
+// Кастомный fetch с жестким лимитом ожидания (2.5 секунды)
+function fetchWithTimeout(url, options, timeout = 2500) {
+    return Promise.race([
+        fetch(url, options),
+        new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout')), timeout))
+    ]);
+}
+
 if (window.visualViewport) {
     window.visualViewport.addEventListener('resize', () => {
         const height = window.visualViewport.height;
@@ -276,12 +292,18 @@ if (window.visualViewport) {
 }
 
 window.onload = function() {
-    // Инициализируем локальный кэш из памяти телефона, чтобы показать историю мгновенно в офлайне
     const cachedMessages = localStorage.getItem('gitchat_messages_cache');
     if (cachedMessages) { allMessagesCache = JSON.parse(cachedMessages); }
     
     const cachedUsers = localStorage.getItem('gitchat_users_cache');
     if (cachedUsers) { CONFIG.users = JSON.parse(cachedUsers); }
+
+    updateHeaderStatus(navigator.onLine);
+
+    // Запрос разрешений на отправку уведомлений системой
+    if ('Notification' in window && Notification.permission === 'default') {
+        Notification.requestPermission();
+    }
 
     if (localStorage.getItem('gitchat_token')) {
         CONFIG.token = localStorage.getItem('gitchat_token');
@@ -293,8 +315,8 @@ window.onload = function() {
         showScreen('screen-list');
         buildChatsList();
         updatePreviews();
+        updateUnreadBadges();
         
-        // Первый запуск синхронизации
         loadAllMessages();
         setInterval(loadAllMessages, 4000);
     } else {
@@ -354,7 +376,6 @@ async function handleLogin() {
             });
         }
     } catch (err) {
-        console.error(err);
         return alert('Не удалось соединиться с GitHub. Проверьте репозиторий и токен!');
     }
 
@@ -371,18 +392,18 @@ async function handleLogin() {
 
 async function loadAllMessages() {
     if (document.hidden || !CONFIG.token) return;
+    if (!navigator.onLine) { updateHeaderStatus(false); return; }
 
     const url = `https://api.github.com/repos/${CONFIG.repo}/contents/`;
     let files = [];
     try {
-        const response = await fetch(url, { headers: { 'Authorization': `Bearer ${CONFIG.token}` } });
-        if (!response.ok) { throw new Error("GitHub Error"); }
+        const response = await fetchWithTimeout(url, { headers: { 'Authorization': `Bearer ${CONFIG.token}` } }, 2500);
+        if (!response.ok) { throw new Error(); }
         files = await response.json();
-        updateHeaderStatus(true); // Успешно подключились!
+        updateHeaderStatus(true);
     } catch (e) { 
-        console.error("Офлайн режим или ошибка сети:", e);
-        updateHeaderStatus(false); // Включаем плашку "Соединение..."
-        return; // Работаем на старых закэшированных данных
+        updateHeaderStatus(false);
+        return; 
     }
 
     const jsonFiles = files.filter(f => f.name.endsWith('.json')).map(f => f.name.replace('.json', ''));
@@ -391,11 +412,13 @@ async function loadAllMessages() {
     
     buildChatsList();
 
+    const oldLength = allMessagesCache.length;
     let loadedMessages = [];
+    
     const requests = CONFIG.users.map(async (user) => {
         const fileUrl = `https://api.github.com/repos/${CONFIG.repo}/contents/${user}.json`;
         try {
-            const res = await fetch(fileUrl, { headers: { 'Authorization': `Bearer ${CONFIG.token}` } });
+            const res = await fetchWithTimeout(fileUrl, { headers: { 'Authorization': `Bearer ${CONFIG.token}` } }, 2500);
             if (res.status === 404) return;
             const data = await res.json();
             
@@ -403,7 +426,6 @@ async function loadAllMessages() {
 
             const content = JSON.parse(decodeURIComponent(escape(atob(data.content))));
             if (Array.isArray(content)) {
-                // Все сообщения с сервера помечаем как доставленные (isPending = false)
                 content.forEach(m => m.isPending = false);
                 loadedMessages = loadedMessages.concat(content);
             }
@@ -412,42 +434,46 @@ async function loadAllMessages() {
 
     await Promise.all(requests);
 
-    // Добавляем локальные неотправленные сообщения из старого кэша, если они там были
     const unsentLocal = allMessagesCache.filter(m => m.isPending && m.user === CONFIG.username);
-    
-    // Пытаемся автоматически доотправить их, если появилась сеть
     if (unsentLocal.length > 0 && isOnlineStatus) {
         syncPendingMessages(unsentLocal);
     }
 
     loadedMessages = loadedMessages.concat(unsentLocal.filter(l => !loadedMessages.some(m => m.time === l.time && m.text === l.text)));
-    
     loadedMessages.sort((a, b) => new Date(a.time) - new Date(b.time));
-    allMessagesCache = loadedMessages;
     
-    // Перезаписываем офлайн-зеркало в памяти телефона
+    // Обработка звука при входящем
+    if (oldLength > 0 && loadedMessages.length > oldLength) {
+        const lastMsg = loadedMessages[loadedMessages.length - 1];
+        if (lastMsg.user !== CONFIG.username && lastMsg.user !== activeChatUser) {
+            playNotificationSound();
+        }
+    }
+
+    allMessagesCache = loadedMessages;
     localStorage.setItem('gitchat_messages_cache', JSON.stringify(allMessagesCache));
 
     updatePreviews();
+    updateUnreadBadges();
 
     if (!document.getElementById('screen-chat').classList.contains('hidden')) {
         renderCurrentChat();
+        localStorage.setItem('last_view_' + activeChatUser, new Date().toISOString());
     }
 }
 
-// Функция фоновой доотправки сообщений при восстановлении сети
 async function syncPendingMessages(pendingList) {
     const url = `https://api.github.com/repos/${CONFIG.repo}/contents/${CONFIG.username}.json`;
     let myHistory = [];
     try {
-        const response = await fetch(url, { headers: { 'Authorization': `Bearer ${CONFIG.token}` } });
+        const response = await fetchWithTimeout(url, { headers: { 'Authorization': `Bearer ${CONFIG.token}` } });
         if (response.ok) {
             const data = await response.json();
             myMessagesSha = data.sha;
             myHistory = JSON.parse(decodeURIComponent(escape(atob(data.content))));
             
             pendingList.forEach(m => {
-                m.isPending = false; // Снимаем статус ожидания
+                m.isPending = false;
                 myHistory.push({ user: m.user, to: m.to, text: m.text, time: m.time });
             });
 
@@ -458,7 +484,7 @@ async function syncPendingMessages(pendingList) {
                 body: JSON.stringify({ message: 'sync_offline_msg', content: newContent, sha: myMessagesSha })
             });
         }
-    } catch(e) { console.error("Не удалось синхронизировать:", e); }
+    } catch(e) { console.error(e); }
 }
 
 function buildChatsList() {
@@ -476,6 +502,7 @@ function buildChatsList() {
         sortedUsers.forEach(user => {
             const item = document.createElement('div');
             item.className = 'chat-item';
+            item.id = `chat-item-${user}`;
             item.onclick = () => openChatWith(user);
 
             const isSelf = user === CONFIG.username;
@@ -488,10 +515,33 @@ function buildChatsList() {
                     <div class="chat-name">${displayName}</div>
                     <div class="chat-preview" id="preview-${user}">Нет сообщений</div>
                 </div>
+                <div id="badge-container-${user}"></div>
             `;
             container.appendChild(item);
         });
     }
+}
+
+function updateUnreadBadges() {
+    CONFIG.users.forEach(user => {
+        const isSelf = user === CONFIG.username;
+        const lastView = localStorage.getItem('last_view_' + user) || new Date(0).toISOString();
+        
+        const unreadCount = allMessagesCache.filter(m => {
+            const matchChat = isSelf ? (m.user === CONFIG.username && m.to === CONFIG.username) : 
+                                       ((m.user === user && m.to === CONFIG.username));
+            return matchChat && m.user !== CONFIG.username && new Date(m.time) > new Date(lastView);
+        }).length;
+
+        const badgeContainer = document.getElementById(`badge-container-${user}`);
+        if (badgeContainer) {
+            if (unreadCount > 0 && user !== activeChatUser) {
+                badgeContainer.innerHTML = `<div class="unread-badge">${unreadCount}</div>`;
+            } else {
+                badgeContainer.innerHTML = '';
+            }
+        }
+    });
 }
 
 async function openNewChatModal() {
@@ -503,7 +553,7 @@ async function openNewChatModal() {
 
     const url = `https://api.github.com/repos/${CONFIG.repo}/contents/`;
     try {
-        const response = await fetch(url, { headers: { 'Authorization': `Bearer ${CONFIG.token}` } });
+        const response = await fetchWithTimeout(url, { headers: { 'Authorization': `Bearer ${CONFIG.token}` } });
         if (response.ok) {
             const files = await response.json();
             CONFIG.users = files.filter(f => f.name.endsWith('.json')).map(f => f.name.replace('.json', ''));
@@ -537,9 +587,20 @@ async function openNewChatModal() {
 
 function openChatWith(user) {
     activeChatUser = user;
+    localStorage.setItem('last_view_' + user, new Date().toISOString());
     document.getElementById('active-chat-title').innerText = (user === CONFIG.username) ? "Избранное" : user;
     showScreen('screen-chat');
     renderCurrentChat();
+    updateUnreadBadges();
+}
+
+function exitChat() {
+    if (activeChatUser) {
+        localStorage.setItem('last_view_' + activeChatUser, new Date().toISOString());
+    }
+    activeChatUser = null;
+    showScreen('screen-list');
+    updateUnreadBadges();
 }
 
 function updatePreviews() {
@@ -595,12 +656,11 @@ function renderCurrentChat() {
             openContextMenu(e, bubble, m.text);
         };
 
-        // Логика галочек в стиле Телеграм
-        let checkMarkHtml = '✓'; // По умолчанию одна галочка
+        let checkMarkHtml = '✓';
         let checkClass = 'sent';
         
         if (m.isPending) {
-            checkMarkHtml = '🕒'; // Часики, если нет интернета и сообщение ждет отправки
+            checkMarkHtml = '🕒';
             checkClass = 'pending';
         }
 
@@ -632,11 +692,8 @@ async function sendMessage() {
     input.value = '';
 
     const timestamp = new Date().toISOString();
-    
-    // Создаем объект сообщения со статусом "в очереди" (isPending: true)
     const localMsg = { user: CONFIG.username, to: activeChatUser, text: text, time: timestamp, isPending: true };
     
-    // Мгновенно добавляем его на экран локально
     allMessagesCache.push(localMsg);
     localStorage.setItem('gitchat_messages_cache', JSON.stringify(allMessagesCache));
     renderCurrentChat();
@@ -647,31 +704,27 @@ async function sendMessage() {
     let myHistory = [];
 
     try {
-        const response = await fetch(url, { headers: { 'Authorization': `Bearer ${CONFIG.token}` } });
+        const response = await fetchWithTimeout(url, { headers: { 'Authorization': `Bearer ${CONFIG.token}` } });
         if (response.ok) {
             const data = await response.json();
             myMessagesSha = data.sha;
             myHistory = JSON.parse(decodeURIComponent(escape(atob(data.content))));
         }
 
-        // Если сеть есть, меняем статус на "отправлено"
         localMsg.isPending = false;
         myHistory.push({ user: CONFIG.username, to: activeChatUser, text: text, time: timestamp });
         
         const newContent = btoa(unescape(encodeURIComponent(JSON.stringify(myHistory))));
 
-        await fetch(url, {
+        await fetchWithTimeout(url, {
             method: 'PUT',
             headers: { 'Authorization': `Bearer ${CONFIG.token}`, 'Content-Type': 'application/json' },
             body: JSON.stringify({ message: 'm_send', content: newContent, sha: myMessagesSha || undefined })
-        });
+        }, 2500);
 
-        // Обновляем кэш чистыми данными с сервера
         loadAllMessages();
     } catch (err) { 
-        console.error("Сообщение сохранено локально. Будет отправлено при появлении сети.", err);
         updateHeaderStatus(false);
-        // Перерисовываем чат, чтобы убедиться, что отображаются «часики»
         renderCurrentChat();
     }
 }
@@ -693,11 +746,11 @@ async function createNewChatFile() {
     const url = `https://api.github.com/repos/${CONFIG.repo}/contents/${newUser}.json`;
     
     try {
-        const checkRes = await fetch(url, { headers: { 'Authorization': `Bearer ${CONFIG.token}` } });
+        const checkRes = await fetchWithTimeout(url, { headers: { 'Authorization': `Bearer ${CONFIG.token}` } });
         if (checkRes.ok) { openChatWith(newUser); return; }
 
         const emptyContent = btoa(JSON.stringify([]));
-        const res = await fetch(url, {
+        const res = await fetchWithTimeout(url, {
             method: 'PUT',
             headers: { 'Authorization': `Bearer ${CONFIG.token}`, 'Content-Type': 'application/json' },
             body: JSON.stringify({ message: `create_chat_${newUser}`, content: emptyContent })
